@@ -1,0 +1,77 @@
+# Flutter/Dart
+.dart_tool/
+.pub-cache/
+.pub/
+build/
+*.packages
+.packages
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+android/.gradle/
+android/app/build/
+android/captures/
+android/key.properties
+*.hprof
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/.last_build_id
+ios/Flutter/App.framework
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Runner/GeneratedPluginRegistrant.*
+
+# macOS
+macos/Pods/
+macos/.symlinks/
+macos/Flutter/ephemeral/
+macos/Flutter/Generated.xcconfig
+macos/Runner/GeneratedPluginRegistrant.*
+
+# Linux
+linux/flutter/ephemeral/
+linux/flutter/generated_plugin_registrant.*
+
+# Web
+web/fonts/
+
+# Windows
+windows/flutter/ephemeral/
+windows/flutter/generated_plugin_registrant.*
+
+# Symbols
+app.*.symbols
+app.*.map.json
+
+# Test
+/coverage/
+
+# Misc
+*.log
+*.pyc
+.history
+.svn/
+migrate_working_dir/
