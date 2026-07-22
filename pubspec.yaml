@@ -40,9 +40,10 @@ dependencies:
   pdf: ^3.10.0
   path_provider: ^2.1.0
   share_plus: ^13.2.1
-  http: ^1.2.0
+  http: ^1.6.0
   package_info_plus: ^10.2.1
   url_launcher: ^6.2.0
+  ota_update: ^7.1.0
 
 dev_dependencies:
   flutter_test:

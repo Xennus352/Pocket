@@ -1,148 +1,119 @@
-import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
-import '../config/colors.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:ota_update/ota_update.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class UpdateService {
+  static const String githubApiUrl =
+      'https://api.github.com/repos/Xennus352/Pocket/releases/latest';
+
   static Future<void> checkForUpdates(BuildContext context) async {
     try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
-      final buildNumber = int.tryParse(packageInfo.buildNumber) ?? 1;
+      // 1. Get installed app version (e.g. "1.0.0")
+      PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      String currentVersion = packageInfo.version.replaceAll('v', '').trim();
 
-      if (!context.mounted) return;
-      
-      _showLoadingDialog(context, 'Checking for updates...');
-
+      // 2. Query GitHub Releases API
       final response = await http.get(
-        Uri.parse('https://api.github.com/repos/Xennus352/Pocket/releases/latest'),
-        headers: {'Accept': 'application/vnd.github.v3+json'},
-      ).timeout(const Duration(seconds: 10));
-
-      if (!context.mounted) return;
-      Navigator.pop(context); // Close loading dialog
+        Uri.parse(githubApiUrl),
+        headers: {'Accept': 'application/vnd.github+json'},
+      );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final latestVersion = data['tag_name']?.toString().replaceFirst('v', '') ?? '';
-        final releaseUrl = data['html_url']?.toString() ?? '';
-        final assets = data['assets'] as List<dynamic>? ?? [];
         
-        // Find APK asset and get its size
-        double apkSizeMB = 0;
-        String apkDownloadUrl = releaseUrl;
-        for (final asset in assets) {
-          final name = asset['name']?.toString() ?? '';
-          if (name.endsWith('.apk')) {
-            apkDownloadUrl = asset['browser_download_url']?.toString() ?? releaseUrl;
-            final sizeBytes = asset['size'] as int? ?? 0;
-            apkSizeMB = sizeBytes / (1024 * 1024);
+        // GitHub tag_name is usually "v2.0.1" or "2.0.1"
+        String rawTag = data['tag_name'] ?? '';
+        String latestVersion = rawTag.replaceAll('v', '').trim();
+
+        // 3. Find the direct download URL for Pocket.apk from release assets
+        List assets = data['assets'] ?? [];
+        String? downloadUrl;
+        
+        for (var asset in assets) {
+          if (asset['name'] == 'Pocket.apk') {
+            downloadUrl = asset['browser_download_url'];
             break;
           }
         }
 
-        if (_isNewerVersion(latestVersion, currentVersion)) {
-          _showUpdateDialog(context, latestVersion, apkDownloadUrl, apkSizeMB);
+        // If Pocket.apk wasn't explicitly matched, fallback to the first asset
+        downloadUrl ??= assets.isNotEmpty ? assets[0]['browser_download_url'] : null;
+
+        // 4. Trigger pop-up if versions differ and download URL exists
+        if (latestVersion != currentVersion && downloadUrl != null) {
+          if (context.mounted) {
+            _showUpdateDialog(context, latestVersion, downloadUrl);
+          }
         }
       }
     } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-      }
-      // Silently fail - no update check is better than crashing
+      debugPrint("Update check failed: $e");
     }
   }
 
-  static bool _isNewerVersion(String latest, String current) {
-    final latestParts = latest.split('.').map(int.tryParse).toList();
-    final currentParts = current.split('.').map(int.tryParse).toList();
-
-    for (int i = 0; i < 3; i++) {
-      final l = latestParts.length > i ? (latestParts[i] ?? 0) : 0;
-      final c = currentParts.length > i ? (currentParts[i] ?? 0) : 0;
-      if (l > c) return true;
-      if (l < c) return false;
-    }
-    return false;
-  }
-
-  static void _showLoadingDialog(BuildContext context, String message) {
+  static void _showUpdateDialog(
+      BuildContext context, String newVersion, String apkUrl) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: Colors.white.withValues(alpha: 0.95),
-        content: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4F7FFF)),
-            ),
-            const SizedBox(width: 16),
-            Text(message, style: const TextStyle(fontSize: 15)),
-          ],
-        ),
-      ),
-    );
-  }
+      builder: (BuildContext context) {
+        double progress = 0.0;
+        bool downloading = false;
 
-  static void _showUpdateDialog(BuildContext context, String version, String url, double apkSizeMB) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: Colors.white.withValues(alpha: 0.95),
-        title: const Row(
-          children: [
-            Icon(Icons.system_update_alt_rounded, color: Color(0xFF4F7FFF), size: 28),
-            SizedBox(width: 12),
-            Text('Update Available', style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Version $version is available.'),
-            const SizedBox(height: 12),
-            if (apkSizeMB > 0)
-              Text(
-                'Download size: ${apkSizeMB.toStringAsFixed(1)} MB',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary.withValues(alpha: 0.8)),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text("New Update Available! (v$newVersion)"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(downloading
+                      ? "Downloading update... ${progress.toInt()}%"
+                      : "A new version of Pocket is available. Update now?"),
+                  if (downloading) ...[
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(value: progress / 100),
+                  ]
+                ],
               ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Later'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF4F7FFF),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _launchUrl(url);
-            },
-            child: const Text('Update Now'),
-          ),
-        ],
-      ),
+              actions: [
+                if (!downloading) ...[
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Later"),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() => downloading = true);
+                      _executeOtaUpdate(apkUrl, (p) {
+                        setState(() => progress = p);
+                      });
+                    },
+                    child: const Text("Update Now"),
+                  ),
+                ]
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
-  static Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  static void _executeOtaUpdate(String url, Function(double) onProgress) {
+    try {
+      OtaUpdate().execute(url, destinationFilename: 'Pocket.apk').listen(
+        (OtaEvent event) {
+          if (event.status == OtaStatus.DOWNLOADING) {
+            double p = double.tryParse(event.value ?? '0') ?? 0;
+            onProgress(p);
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint("OTA Update Error: $e");
     }
   }
 }
