@@ -81,6 +81,7 @@ class HomeScreen extends StatelessWidget {
                             expense: txnProvider.totalExpense,
                             currency: currency,
                           ),
+                          const SizedBox(height: 24),
                           _TransactionCountTile(count: txnProvider.totalTransactionCount),
                           const SizedBox(height: 28),
                           _SectionLabel(
