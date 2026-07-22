@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -54,7 +54,7 @@ class _ExportDataScreenState extends State<ExportDataScreen> {
                 style: const pw.TextStyle(
                     fontSize: 12, color: PdfColors.grey600)),
             pw.SizedBox(height: 24),
-            pw.Table.fromTextArray(
+            pw.TableHelper.fromTextArray(
               headerStyle: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold,
                   fontSize: 10,
@@ -77,7 +77,7 @@ class _ExportDataScreenState extends State<ExportDataScreen> {
                 return [
                   DateFormat('yyyy-MM-dd').format(txn.date),
                   txn.title,
-                  txn.type == TransactionType.income ? 'Income' : 'Expense',
+                  txn.type == TransactionType.income ? 'Cash In' : 'Cash Out',
                   '${txn.type == TransactionType.income ? '+' : '-'}${NumberFormat.currency(symbol: '', decimalDigits: 0).format(txn.amount)} $currency',
                   txn.category,
                   txn.note ?? '',
@@ -117,7 +117,10 @@ class _ExportDataScreenState extends State<ExportDataScreen> {
       await file.writeAsBytes(await pdf.save());
 
       if (!mounted) return;
-      await Share.shareXFiles([XFile(file.path)], text: 'Pocket Transaction Report');
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(file.path)],
+        text: 'Pocket Transaction Report',
+      ));
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

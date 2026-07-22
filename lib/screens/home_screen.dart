@@ -54,6 +54,7 @@ class HomeScreen extends StatelessWidget {
                           const SizedBox(height: 20),
                           GlassWalletCard(
                             balance: '${fmt.format(txnProvider.balance)} $currency',
+                            currency: currency,
                             sources: userProvider.profile.wallets,
                           ),
                           const SizedBox(height: 12),
@@ -120,90 +121,6 @@ class HomeScreen extends StatelessWidget {
     Navigator.push(
       context,
       glassRoute(const TransactionHistoryScreen()),
-    );
-  }
-
-  void _setBalance(BuildContext context) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: Colors.white.withValues(alpha: 0.95),
-        title: const Text('Set Starting Balance',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                hintText: '0',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final text = controller.text.trim();
-              if (text.isEmpty) return;
-              final amount = double.tryParse(text);
-              if (amount == null || amount < 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a valid positive number'),
-                    backgroundColor: AppColors.expense,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-                return;
-              }
-              try {
-                await context.read<UserProvider>().updateStartingBalance(amount);
-                await context.read<TransactionProvider>().loadData();
-              } catch (e) {
-                if (!ctx.mounted) return;
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error setting balance: $e'),
-                    backgroundColor: AppColors.expense,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                );
-                return;
-              }
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Starting balance set to $amount'),
-                  backgroundColor: AppColors.primaryBlue,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              );
-            },
-            child: const Text('Save',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
     );
   }
 
@@ -286,16 +203,6 @@ class HomeScreen extends StatelessWidget {
                         context,
                         glassRoute(const SettingsScreen()),
                       );
-                    },
-                  ),
-                  _menuItem(
-                    ctx,
-                    Icons.balance_rounded,
-                    'Set Balance',
-                    'Adjust starting balance',
-                    () {
-                      Navigator.pop(ctx);
-                      _setBalance(context);
                     },
                   ),
                 ],
@@ -549,13 +456,13 @@ class _QuickActions extends StatelessWidget {
       children: [
         GlassActionButton(
           icon: Icons.qr_code_scanner_rounded,
-          label: 'Receive',
+          label: 'Cash In',
           iconColor: AppColors.income,
           color: AppColors.income,
           onTap: () {
             Navigator.push(
               context,
-              glassRoute(const AddTransactionScreen(initialType: 'Income')),
+              glassRoute(const AddTransactionScreen(initialType: 'Cash In')),
             );
           },
         ),
@@ -607,19 +514,45 @@ class _TmpiRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+        color: Colors.white.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
       ),
       child: Row(
         children: [
-          _TmpiItem(label: 'Balance', amount: '${fmt.format(balance)} $currency', color: AppColors.primaryBlue),
-          Container(height: 30, width: 1, color: AppColors.textTertiary.withValues(alpha: 0.2)),
-          _TmpiItem(label: 'TMPI', amount: '${fmt.format(tmpi)} $currency', color: AppColors.violetHint),
-          Container(height: 30, width: 1, color: AppColors.textTertiary.withValues(alpha: 0.2)),
-          _TmpiItem(label: 'Balance+TMPI', amount: '${fmt.format(balancePlusTmpi)} $currency', color: AppColors.income),
+          Expanded(
+            child: _TmpiItem(
+              label: 'Balance',
+              amount: '${fmt.format(balance)} $currency',
+              color: AppColors.primaryBlue,
+            ),
+          ),
+          Container(
+            height: 32,
+            width: 1,
+            color: AppColors.textTertiary.withValues(alpha: 0.2),
+          ),
+          Expanded(
+            child: _TmpiItem(
+              label: 'TMPI',
+              amount: '${fmt.format(tmpi)} $currency',
+              color: AppColors.violetHint,
+            ),
+          ),
+          Container(
+            height: 32,
+            width: 1,
+            color: AppColors.textTertiary.withValues(alpha: 0.2),
+          ),
+          Expanded(
+            child: _TmpiItem(
+              label: 'Total',
+              amount: '${fmt.format(balancePlusTmpi)} $currency',
+              color: AppColors.income,
+            ),
+          ),
         ],
       ),
     );
@@ -635,14 +568,29 @@ class _TmpiItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(label, style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-          const SizedBox(height: 2),
-          Text(amount, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color), overflow: TextOverflow.ellipsis),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          amount,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }
@@ -740,14 +688,14 @@ class _MonthlyOverview extends StatelessWidget {
           Row(
             children: [
               _StatItem(
-                label: 'Income',
+                label: 'Cash In',
                 amount: '+${Formatters.compactAmount(income)} $currency',
                 color: AppColors.income,
                 icon: Icons.arrow_downward_rounded,
               ),
               const SizedBox(width: 12),
               _StatItem(
-                label: 'Expense',
+                label: 'Cash Out',
                 amount: '-${Formatters.compactAmount(expense)} $currency',
                 color: AppColors.expense,
                 icon: Icons.arrow_upward_rounded,
@@ -1227,8 +1175,18 @@ class _BudgetProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
     final ratio = budget > 0 ? (spent / budget).clamp(0.0, 1.0).toDouble() : 0.0;
+    final pct = (ratio * 100).round();
     final remaining = budget - spent;
     final remainingFmt = '${remaining < 0 ? '-' : ''}${fmt.format(remaining.abs())} $currency';
+
+    Color barColor;
+    if (ratio >= 1) {
+      barColor = AppColors.expense;
+    } else if (ratio >= 0.8) {
+      barColor = AppColors.warning;
+    } else {
+      barColor = AppColors.primaryBlue;
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1251,31 +1209,70 @@ class _BudgetProgress extends StatelessWidget {
                       color: AppColors.textPrimary.withValues(alpha: 0.9))),
               const Spacer(),
               Text(
-                '${fmt.format(spent)} $currency / ${fmt.format(budget)} $currency',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                '$pct%',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: barColor,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 8,
-              backgroundColor: Colors.grey.withValues(alpha: 0.15),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                ratio >= 1 ? AppColors.expense : AppColors.primaryBlue,
+          const SizedBox(height: 10),
+          Stack(
+            children: [
+              Container(
+                height: 10,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(5),
+                  color: Colors.grey.withValues(alpha: 0.15),
+                ),
               ),
-            ),
+              FractionallySizedBox(
+                widthFactor: ratio,
+                child: Container(
+                  height: 10,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(5),
+                    gradient: LinearGradient(
+                      colors: ratio >= 1
+                          ? [AppColors.expense, AppColors.expense.withValues(alpha: 0.7)]
+                          : ratio >= 0.8
+                              ? [AppColors.warning, AppColors.warning.withValues(alpha: 0.7)]
+                              : [AppColors.primaryBlue, AppColors.primaryBlue.withValues(alpha: 0.7)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: barColor.withValues(alpha: 0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Remaining: $remainingFmt',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: remaining < 0 ? AppColors.expense : AppColors.textSecondary,
-            ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${fmt.format(spent)} $currency spent',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary.withValues(alpha: 0.8),
+                ),
+              ),
+              Text(
+                'Remaining: $remainingFmt',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: remaining < 0 ? AppColors.expense : AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
         ],
       ),

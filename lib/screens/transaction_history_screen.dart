@@ -37,9 +37,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
             (t.note?.toLowerCase().contains(q) ?? false);
       }).toList();
     }
-    if (_filterType == 'Income') {
+    if (_filterType == 'Cash In') {
       filtered = filtered.where((t) => t.type == TransactionType.income).toList();
-    } else if (_filterType == 'Expense') {
+    } else if (_filterType == 'Cash Out') {
       filtered = filtered.where((t) => t.type == TransactionType.expense).toList();
     }
     return filtered;
@@ -214,7 +214,7 @@ class _FilterChips extends StatelessWidget {
 
   const _FilterChips({required this.selected, required this.onChanged});
 
-  static const _options = ['All', 'Income', 'Expense'];
+  static const _options = ['All', 'Cash In', 'Cash Out'];
 
   @override
   Widget build(BuildContext context) {

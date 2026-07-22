@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/transaction.dart';
+import '../providers/user_provider.dart';
 import '../services/database_service.dart';
 
 class BalanceImpactResult {
@@ -21,6 +22,9 @@ class BalanceImpactResult {
 
 class TransactionProvider extends ChangeNotifier {
   final DatabaseService _db = DatabaseService();
+  UserProvider? _userProvider;
+
+  set userProvider(UserProvider v) => _userProvider = v;
 
   List<Transaction> _transactions = [];
   double _balance = 0;
@@ -59,6 +63,7 @@ class TransactionProvider extends ChangeNotifier {
     required double amount,
     required TransactionType type,
     required double warningThresholdPercent,
+    double walletBalance = 0,
   }) {
     if (type == TransactionType.income) {
       return const BalanceImpactResult(
@@ -69,15 +74,16 @@ class TransactionProvider extends ChangeNotifier {
         newBalance: 0,
       );
     }
-    final hasNoBalance = _balance <= 0;
-    final newBalance = _balance - amount;
+    final balance = walletBalance;
+    final hasNoBalance = balance <= 0;
+    final newBalance = balance - amount;
     final willBeInsufficient = newBalance < 0;
-    final isBigChange = hasNoBalance || (amount >= _balance * warningThresholdPercent / 100);
+    final isBigChange = hasNoBalance || (amount >= balance * warningThresholdPercent / 100);
     return BalanceImpactResult(
       hasNoBalance: hasNoBalance,
       willBeInsufficient: willBeInsufficient,
       isBigChange: isBigChange,
-      currentBalance: _balance,
+      currentBalance: balance,
       newBalance: newBalance,
     );
   }
@@ -123,6 +129,13 @@ class TransactionProvider extends ChangeNotifier {
   Future<bool> addTransaction(Transaction txn) async {
     try {
       await _db.insertTransaction(txn);
+      if (_userProvider != null && txn.paymentType != null) {
+        await _userProvider!.updateWalletBalance(
+          txn.paymentType!,
+          txn.amount,
+          isIncome: txn.type == TransactionType.income,
+        );
+      }
       await loadData();
       return true;
     } catch (e) {
@@ -134,6 +147,23 @@ class TransactionProvider extends ChangeNotifier {
 
   Future<void> updateTransaction(Transaction txn) async {
     try {
+      final old = _transactions.firstWhere((t) => t.id == txn.id, orElse: () => txn);
+      if (_userProvider != null) {
+        if (old.paymentType != null) {
+          await _userProvider!.updateWalletBalance(
+            old.paymentType!,
+            old.amount,
+            isIncome: old.type != TransactionType.income,
+          );
+        }
+        if (txn.paymentType != null) {
+          await _userProvider!.updateWalletBalance(
+            txn.paymentType!,
+            txn.amount,
+            isIncome: txn.type == TransactionType.income,
+          );
+        }
+      }
       await _db.updateTransaction(txn);
       await loadData();
     } catch (e) {
@@ -144,6 +174,14 @@ class TransactionProvider extends ChangeNotifier {
 
   Future<void> deleteTransaction(int id) async {
     try {
+      final txn = _transactions.firstWhere((t) => t.id == id);
+      if (_userProvider != null && txn.paymentType != null) {
+        await _userProvider!.updateWalletBalance(
+          txn.paymentType!,
+          txn.amount,
+          isIncome: txn.type != TransactionType.income,
+        );
+      }
       await _db.deleteTransaction(id);
       await loadData();
     } catch (e) {

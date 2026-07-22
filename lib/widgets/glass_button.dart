@@ -124,7 +124,7 @@ class GlassTypeToggle extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? (option == 'Income'
+                          ? (option == 'Cash In'
                               ? AppColors.income
                               : AppColors.expense)
                           : Colors.transparent,

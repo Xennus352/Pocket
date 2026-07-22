@@ -1,9 +1,11 @@
+import 'wallet.dart';
+
 class UserProfile {
   String name;
   String currency;
   double startingBalance;
   double monthlyBudget;
-  List<String> wallets;
+  List<Wallet> wallets;
   double warningThresholdPercent;
 
   UserProfile({
@@ -11,9 +13,11 @@ class UserProfile {
     this.currency = 'MMK',
     this.startingBalance = 0,
     this.monthlyBudget = 1000000,
-    List<String>? wallets,
+    List<Wallet>? wallets,
     this.warningThresholdPercent = 20,
-  }) : wallets = wallets ?? ['KPay', 'WavePay', 'Cash'];
+  }) : wallets = wallets ?? [Wallet(name: 'KPay'), Wallet(name: 'WavePay'), Wallet(name: 'Cash')];
+
+  List<String> get walletNames => wallets.map((w) => w.name).toList();
 
   String get greeting {
     final hour = DateTime.now().hour;
@@ -27,7 +31,7 @@ class UserProfile {
         'currency': currency,
         'starting_balance': startingBalance,
         'monthly_budget': monthlyBudget,
-        'wallets': wallets.join(','),
+        'wallets': Wallet.encodeList(wallets),
         'warning_threshold_percent': warningThresholdPercent,
         'id': 1,
       };
@@ -37,7 +41,7 @@ class UserProfile {
         currency: map['currency'] as String? ?? 'MMK',
         startingBalance: (map['starting_balance'] as num?)?.toDouble() ?? 0,
         monthlyBudget: (map['monthly_budget'] as num?)?.toDouble() ?? 1000000,
-        wallets: (map['wallets'] as String? ?? 'KPay,WavePay,Cash').split(','),
+        wallets: Wallet.decodeList(map['wallets'] as String? ?? 'KPay,WavePay,Cash'),
         warningThresholdPercent: (map['warning_threshold_percent'] as num?)?.toDouble() ?? 20,
       );
 }

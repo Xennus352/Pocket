@@ -59,9 +59,13 @@ class _AppEntryState extends State<AppEntry> {
   }
 
   Future<void> _initProviders() async {
-    await context.read<UserProvider>().init();
-    if (context.read<UserProvider>().onboardingComplete) {
-      await context.read<TransactionProvider>().init();
+    final userProvider = context.read<UserProvider>();
+    await userProvider.init();
+    if (!mounted) return;
+    final txnProvider = context.read<TransactionProvider>();
+    txnProvider.userProvider = userProvider;
+    if (userProvider.onboardingComplete) {
+      await txnProvider.init();
     }
     if (mounted) setState(() => _providersReady = true);
   }

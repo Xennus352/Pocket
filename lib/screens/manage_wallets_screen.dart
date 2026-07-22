@@ -1,9 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../config/colors.dart';
+import '../models/wallet.dart';
 import '../providers/user_provider.dart';
 import '../utils/formatters.dart';
+import '../widgets/responsive.dart';
 
 class ManageWalletsScreen extends StatefulWidget {
   const ManageWalletsScreen({super.key});
@@ -13,9 +16,10 @@ class ManageWalletsScreen extends StatefulWidget {
 }
 
 class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
+  final _fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
 
   void _addWallet() {
-    final controller = TextEditingController();
+    final nameController = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -28,7 +32,7 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
             child: TextField(
-              controller: controller,
+              controller: nameController,
               autofocus: true,
               decoration: InputDecoration(
                 hintText: 'Wallet name',
@@ -49,7 +53,7 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
           ),
           TextButton(
             onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
+              if (nameController.text.trim().isNotEmpty) {
                 final userProvider = context.read<UserProvider>();
                 if (userProvider.profile.wallets.length >= 8) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -62,8 +66,8 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
                   Navigator.pop(ctx);
                   return;
                 }
-                final wallets = List<String>.from(userProvider.profile.wallets)
-                  ..add(controller.text.trim());
+                final wallets = List<Wallet>.from(userProvider.profile.wallets)
+                  ..add(Wallet(name: nameController.text.trim()));
                 userProvider.updateWallets(wallets);
               }
               Navigator.pop(ctx);
@@ -76,11 +80,67 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
     );
   }
 
-  void _deleteWallet(String wallet) {
+  void _deleteWallet(String walletName) {
     final userProvider = context.read<UserProvider>();
-    final wallets = List<String>.from(userProvider.profile.wallets)
-      ..remove(wallet);
+    final wallets = List<Wallet>.from(userProvider.profile.wallets)
+      ..removeWhere((w) => w.name == walletName);
     userProvider.updateWallets(wallets);
+  }
+
+  void _editBalance(Wallet wallet) {
+    final controller = TextEditingController(text: wallet.balance.toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: Colors.white.withValues(alpha: 0.95),
+        title: Text('Set ${wallet.name} Balance',
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Balance',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final amount = double.tryParse(controller.text.trim());
+              if (amount != null) {
+                final userProvider = context.read<UserProvider>();
+                for (final w in userProvider.profile.wallets) {
+                  if (w.name == wallet.name) {
+                    w.balance = amount;
+                    break;
+                  }
+                }
+                userProvider.updateWallets(userProvider.profile.wallets);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -90,7 +150,7 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
+        child: Responsive(child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
           children: [
             _AppBar(
@@ -108,10 +168,10 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
             ),
             const SizedBox(height: 12),
             ...wallets.map((w) => _WalletTile(
-                  name: w,
-                  color: WalletHelper.colorFor(w),
-                  onDelete: wallets.length > 1 ? () => _deleteWallet(w) : null,
-                  icon: WalletHelper.iconFor(w),
+                  wallet: w,
+                  fmt: _fmt,
+                  onDelete: wallets.length > 1 ? () => _deleteWallet(w.name) : null,
+                  onTap: () => _editBalance(w),
                 )),
             const SizedBox(height: 20),
             Center(
@@ -149,7 +209,7 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
               ),
             ),
           ],
-        ),
+        )),
       ),
     );
   }
@@ -192,67 +252,83 @@ class _AppBar extends StatelessWidget {
 }
 
 class _WalletTile extends StatelessWidget {
-  final String name;
-  final Color color;
+  final Wallet wallet;
+  final NumberFormat fmt;
   final VoidCallback? onDelete;
-  final IconData icon;
+  final VoidCallback? onTap;
 
   const _WalletTile({
-    required this.name,
-    required this.color,
+    required this.wallet,
+    required this.fmt,
     this.onDelete,
-    required this.icon,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = WalletHelper.colorFor(wallet.name);
+    final icon = WalletHelper.iconFor(wallet.name);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: color, size: 22),
                   ),
-                  child: Icon(icon, color: color, size: 22),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(name,
-                      style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary)),
-                ),
-                if (onDelete != null)
-                  GestureDetector(
-                    onTap: onDelete,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.expense.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.delete_rounded,
-                          color: AppColors.expense, size: 18),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(wallet.name,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary)),
+                        const SizedBox(height: 2),
+                        Text('${fmt.format(wallet.balance)} MMK',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textSecondary.withValues(alpha: 0.8))),
+                      ],
                     ),
                   ),
-              ],
+                  if (onDelete != null)
+                    GestureDetector(
+                      onTap: onDelete,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.expense.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.delete_rounded,
+                            color: AppColors.expense, size: 18),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

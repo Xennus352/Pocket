@@ -18,7 +18,7 @@ class AddTransactionScreen extends StatefulWidget {
 
   const AddTransactionScreen({
     super.key,
-    this.initialType = 'Expense',
+    this.initialType = 'Cash Out',
     this.initialAgentType,
   });
 
@@ -40,7 +40,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _type = widget.initialType;
     if (widget.initialAgentType != null) {
       _agentType = widget.initialAgentType!;
-      _type = widget.initialAgentType == 'Cash-In' ? 'Income' : 'Expense';
+      _type = widget.initialAgentType == 'Cash-In' ? 'Cash In' : 'Cash Out';
     }
     _loadCustomers();
   }
@@ -62,7 +62,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   String _agentType = '';
-  DateTime _selectedDate = DateTime.now();
   bool _submitting = false;
   bool _isPaid = true;
   List<Customer> _customers = [];
@@ -88,7 +87,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userWallets = context.read<UserProvider>().profile.wallets;
+    final userWallets = context.read<UserProvider>().profile.walletNames;
     final currency = context.read<UserProvider>().profile.currency;
 
     return Scaffold(
@@ -122,7 +121,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               if (!_isAgentMode) ...[
                 const SizedBox(height: 24),
                 GlassTypeToggle(
-                  options: ['Income', 'Expense'],
+                  options: ['Cash In', 'Cash Out'],
                   selected: _type,
                   onChanged: (v) => setState(() => _type = v),
                 ),
@@ -169,10 +168,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 onChanged: (v) => setState(() => _isPaid = v),
               ),
               const SizedBox(height: 16),
-              _DatePicker(
-                date: _selectedDate,
-                onTap: _pickDate,
-              ),
+              _DatePicker(),
               const SizedBox(height: 12),
               _PayingWithLabel(wallet: _wallet),
               const SizedBox(height: 16),
@@ -216,26 +212,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return result ?? false;
   }
 
-  Future<void> _pickDate() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: AppColors.primaryBlue,
-              ),
-        ),
-        child: child!,
-      ),
-    );
-    if (date != null) {
-      setState(() => _selectedDate = date);
-    }
-  }
-
   String? _validate() {
     if (_amount.isEmpty || _amount == '0') {
       return 'Please enter an amount greater than 0';
@@ -276,26 +252,29 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     setState(() => _submitting = true);
 
     final amount = double.parse(_amount);
-    final txnType = _type == 'Income' ? TransactionType.income : TransactionType.expense;
+    final txnType = _type == 'Cash In' ? TransactionType.income : TransactionType.expense;
 
     final txnProvider = context.read<TransactionProvider>();
     final userProvider = context.read<UserProvider>();
 
     if (txnType == TransactionType.expense) {
+      final wallet = userProvider.profile.wallets.where((w) => w.name == _wallet).firstOrNull;
+      final walletBalance = wallet?.balance ?? 0;
       final impact = txnProvider.checkBalanceImpact(
         amount: amount,
         type: txnType,
         warningThresholdPercent: userProvider.profile.warningThresholdPercent,
+        walletBalance: walletBalance,
       );
       if (impact.hasNoBalance || impact.willBeInsufficient || impact.isBigChange) {
         setState(() => _submitting = false);
         String message;
         if (impact.hasNoBalance) {
-          message = 'Your current balance is 0 or negative (${impact.currentBalance.toStringAsFixed(0)}).';
+          message = '$_wallet balance is 0 or negative (${impact.currentBalance.toStringAsFixed(0)}).';
         } else if (impact.willBeInsufficient) {
-          message = 'This expense (${amount.toStringAsFixed(0)}) will leave your balance negative (${impact.newBalance.toStringAsFixed(0)}).';
+          message = 'This expense (${amount.toStringAsFixed(0)}) will leave $_wallet balance negative (${impact.newBalance.toStringAsFixed(0)}).';
         } else {
-          message = 'This expense (${amount.toStringAsFixed(0)}) is at least ${userProvider.profile.warningThresholdPercent.toStringAsFixed(0)}% of your current balance (${impact.currentBalance.toStringAsFixed(0)}).';
+          message = 'This expense (${amount.toStringAsFixed(0)}) is at least ${userProvider.profile.warningThresholdPercent.toStringAsFixed(0)}% of $_wallet balance (${impact.currentBalance.toStringAsFixed(0)}).';
         }
         final proceed = await _showBalanceWarning(context, message);
         if (!mounted) return;
@@ -309,7 +288,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       amount: amount,
       type: txnType,
       category: _isAgentMode ? _agentType : 'Other',
-      date: _selectedDate,
+      date: DateTime.now(),
       note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
       agentTxnType: _isAgentMode ? _agentTypes.firstWhere((a) => a.$1 == _agentType).$3 : null,
       commission: _isAgentMode ? (double.tryParse(_commissionController.text.trim()) ?? 0) : 0,
@@ -867,50 +846,42 @@ class _GlassTextField extends StatelessWidget {
 }
 
 class _DatePicker extends StatelessWidget {
-  final DateTime date;
-  final VoidCallback onTap;
-
-  const _DatePicker({required this.date, required this.onTap});
-
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.calendar_month_rounded,
-                  color: AppColors.textTertiary.withValues(alpha: 0.8),
-                  size: 20,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.calendar_month_rounded,
+                color: AppColors.textTertiary.withValues(alpha: 0.8),
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                DateFormat('MMM d, yyyy').format(DateTime.now()),
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w500,
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  DateFormat('MMM d, yyyy').format(date),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const Spacer(),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.textTertiary.withValues(alpha: 0.8),
-                  size: 20,
-                ),
-              ],
-            ),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.lock_outline_rounded,
+                color: AppColors.textTertiary.withValues(alpha: 0.5),
+                size: 16,
+              ),
+            ],
           ),
         ),
       ),

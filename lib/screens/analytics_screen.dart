@@ -1,67 +1,53 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../config/colors.dart';
+import '../models/transaction.dart';
+import '../models/wallet.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/user_provider.dart';
 import '../utils/formatters.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/responsive.dart';
 
-class AnalyticsScreen extends StatefulWidget {
+class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
-
-  @override
-  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
-}
-
-class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  String _selectedType = 'Expense';
 
   @override
   Widget build(BuildContext context) {
     return Consumer2<TransactionProvider, UserProvider>(
       builder: (context, provider, userProvider, _) {
         final currency = userProvider.profile.currency;
-        final categoryMap = _selectedType == 'Expense'
-            ? provider.expenseByCategory
-            : provider.incomeByCategory;
-        final total = categoryMap.values.fold(0.0, (a, b) => a + b);
+        final now = DateTime.now();
+        final todayTxns = provider.transactions.where((t) =>
+          t.date.year == now.year &&
+          t.date.month == now.month &&
+          t.date.day == now.day
+        ).toList();
+        final dailyIncome = todayTxns
+            .where((t) => t.type == TransactionType.income)
+            .fold<double>(0, (s, t) => s + t.amount);
+        final dailyExpense = todayTxns
+            .where((t) => t.type == TransactionType.expense)
+            .fold<double>(0, (s, t) => s + t.amount);
+        final dailyNet = dailyIncome - dailyExpense;
+        final totalFlow = dailyIncome + dailyExpense;
+        final incomeRatio = totalFlow > 0 ? dailyIncome / totalFlow : 0.5;
 
         return Scaffold(
           body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+            child: Responsive(child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
               children: [
-                _Header(),
+                _Header(now: now, net: dailyNet, income: dailyIncome, expense: dailyExpense, currency: currency),
                 const SizedBox(height: 20),
-                _TypeToggle(
-                  selected: _selectedType,
-                  onChanged: (v) => setState(() => _selectedType = v),
-                ),
-                const SizedBox(height: 16),
-                _SpendingChart(
-                  categoryMap: categoryMap,
-                  total: total,
-                  currency: currency,
-                ),
+                _FlowBar(incomeRatio: incomeRatio, fmt: NumberFormat.currency(symbol: '', decimalDigits: 0), currency: currency),
                 const SizedBox(height: 20),
-                _StatsRow(
-                  income: provider.totalIncome,
-                  expense: provider.totalExpense,
-                  currency: currency,
-                ),
-                const SizedBox(height: 12),
-                _TransactionCountTile(count: provider.totalTransactionCount),
-                const SizedBox(height: 24),
-                _SectionLabel('Category Analysis'),
-                const SizedBox(height: 12),
-                _CategoryBreakdown(
-                  categoryMap: categoryMap,
-                  total: total,
-                  currency: currency,
-                ),
+                _WalletGrid(wallets: userProvider.profile.wallets, transactions: todayTxns, currency: currency),
+                const SizedBox(height: 20),
+                _TodayTxnsList(transactions: todayTxns, currency: currency),
               ],
-            ),
+            )),
           ),
         );
       },
@@ -69,620 +55,375 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 }
 
-class _TransactionCountTile extends StatelessWidget {
-  final int count;
-
-  const _TransactionCountTile({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      borderRadius: 16,
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.receipt_long_rounded, color: AppColors.primaryBlue, size: 18),
-          ),
-          const SizedBox(width: 12),
-          const Text('Total Transactions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
-          const Spacer(),
-          Text(
-            Formatters.compactAmount(count.toDouble()),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TypeToggle extends StatelessWidget {
-  final String selected;
-  final ValueChanged<String> onChanged;
-
-  const _TypeToggle({required this.selected, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged('Expense'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: selected == 'Expense' ? AppColors.expense.withValues(alpha: 0.15) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.trending_up_rounded, size: 16, color: selected == 'Expense' ? AppColors.expense : AppColors.textSecondary),
-                    const SizedBox(width: 6),
-                    Text('Expense', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected == 'Expense' ? AppColors.expense : AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged('Receive'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: selected == 'Receive' ? AppColors.income.withValues(alpha: 0.15) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.trending_down_rounded, size: 16, color: selected == 'Receive' ? AppColors.income : AppColors.textSecondary),
-                    const SizedBox(width: 6),
-                    Text('Receive', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected == 'Receive' ? AppColors.income : AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _Header extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final canPop = Navigator.canPop(context);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        canPop
-            ? GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
-                  ),
-                  child: const Icon(Icons.chevron_left_rounded, color: AppColors.textPrimary, size: 24),
-                ),
-              )
-            : const SizedBox(width: 44),
-        const Text(
-          'Activity',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
-          ),
-          child: Icon(
-            Icons.tune_rounded,
-            color: AppColors.textSecondary.withValues(alpha: 0.8),
-            size: 20,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SpendingChart extends StatelessWidget {
-  final Map<String, double> categoryMap;
-  final double total;
+  final DateTime now;
+  final double net;
+  final double income;
+  final double expense;
   final String currency;
 
-  const _SpendingChart({required this.categoryMap, required this.total, required this.currency});
+  const _Header({required this.now, required this.net, required this.income, required this.expense, required this.currency});
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
+    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
+    final dayName = DateFormat('EEEE').format(now);
+    final dateStr = DateFormat('MMM d').format(now);
+    final isPositive = net >= 0;
+
+    return Container(
       padding: const EdgeInsets.all(24),
-      borderRadius: 28,
-      gradient: [
-        AppColors.darkNavy.withValues(alpha: 0.85),
-        AppColors.darkNavySoft.withValues(alpha: 0.7),
-      ],
-      border: Border.all(
-        color: Colors.white.withValues(alpha: 0.08),
-        width: 1,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: AppColors.darkNavy.withValues(alpha: 0.3),
-          blurRadius: 30,
-          offset: const Offset(0, 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.darkNavy.withValues(alpha: 0.9),
+            AppColors.darkNavySoft.withValues(alpha: 0.7),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-      ],
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.darkNavy.withValues(alpha: 0.3),
+            blurRadius: 30,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Overview',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white.withValues(alpha: 0.9),
-                ),
-              ),
+              Icon(Icons.analytics_rounded, color: Colors.white.withValues(alpha: 0.7), size: 20),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${Formatters.compactAmount(total)} $currency',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.income,
-                  ),
+                  'Today',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 180,
-            child: categoryMap.isEmpty
-                ? Center(
-                    child: Text(
-                      'No data this month',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.4),
-                        fontSize: 14,
-                      ),
-                    ),
-                  )
-                : _BarChartWidget(
-                    categoryMap: categoryMap,
-                    total: total,
-                  ),
+          const SizedBox(height: 20),
+          Text(dayName, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 2),
+          Text(dateStr, style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 11)),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${isPositive ? '+' : ''}${fmt.format(net)}',
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                  color: isPositive ? AppColors.income : AppColors.expense,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(currency, style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 16, fontWeight: FontWeight.w500)),
+              ),
+              const Spacer(),
+              _miniChip(Icons.arrow_downward_rounded, fmt.format(income), AppColors.income),
+              const SizedBox(width: 8),
+              _miniChip(Icons.arrow_upward_rounded, fmt.format(expense), AppColors.expense),
+            ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 }
 
-class _BarChartWidget extends StatelessWidget {
-  final Map<String, double> categoryMap;
-  final double total;
+class _FlowBar extends StatelessWidget {
+  final double incomeRatio;
+  final NumberFormat fmt;
+  final String currency;
 
-  const _BarChartWidget({
-    required this.categoryMap,
-    required this.total,
-  });
+  const _FlowBar({required this.incomeRatio, required this.fmt, required this.currency});
 
   @override
   Widget build(BuildContext context) {
-    final bucketed = _bucketCategories(categoryMap, total);
-    final entries = bucketed.entries.toList();
-
-    final maxValue = entries.isNotEmpty ? entries.first.value : 1.0;
-
-    final chartColors = [
-      AppColors.primaryBlue,
-      AppColors.violetHint,
-      AppColors.lightCyan,
-      AppColors.skyBlue,
-      AppColors.violetLight,
-      AppColors.income,
-    ];
-
-    return BarChart(
-      BarChartData(
-        alignment: BarChartAlignment.spaceAround,
-        maxY: maxValue * 1.3,
-        barTouchData: BarTouchData(
-          touchTooltipData: BarTouchTooltipData(
-            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-              final category = entries[group.x.toInt()].key;
-              final amount = entries[group.x.toInt()].value;
-              return BarTooltipItem(
-                '$category\n${Formatters.compactAmount(amount)}',
-                TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              );
-            },
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: 20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.swap_horiz_rounded, size: 16, color: AppColors.textSecondary.withValues(alpha: 0.8)),
+              const SizedBox(width: 6),
+              Text('Cash Flow Split', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary.withValues(alpha: 0.8))),
+            ],
           ),
-        ),
-        titlesData: FlTitlesData(
-          show: true,
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) {
-                final idx = value.toInt();
-                if (idx >= 0 && idx < entries.length) {
-                  final label = entries[idx].key;
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      label.length > 6 ? '${label.substring(0, 6)}...' : label,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.white.withValues(alpha: 0.5),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 10,
+              child: Row(
+                children: [
+                  Flexible(
+                    flex: (incomeRatio * 100).round(),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppColors.income.withValues(alpha: 0.6), AppColors.income],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
                       ),
                     ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
+                  ),
+                  Flexible(
+                    flex: ((1 - incomeRatio) * 100).round().clamp(1, 100),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppColors.expense, AppColors.expense.withValues(alpha: 0.6)],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: maxValue / 4,
-          getDrawingHorizontalLine: (value) => FlLine(
-            color: Colors.white.withValues(alpha: 0.06),
-            strokeWidth: 1,
-          ),
-        ),
-        borderData: FlBorderData(show: false),
-        barGroups: entries.asMap().entries.map((entry) {
-          final idx = entry.key;
-          final data = entry.value;
-          return BarChartGroupData(
-            x: idx,
-            barRods: [
-              BarChartRodData(
-                toY: data.value,
-                color: chartColors[idx % chartColors.length],
-                width: 18,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(6),
-                  topRight: Radius.circular(6),
-                ),
-                gradient: LinearGradient(
-                  colors: [
-                    chartColors[idx % chartColors.length],
-                    chartColors[idx % chartColors.length].withValues(alpha: 0.6),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _flowLegend(Icons.arrow_downward_rounded, 'Cash In', '${(incomeRatio * 100).round()}%', AppColors.income),
+              _flowLegend(Icons.arrow_upward_rounded, 'Cash Out', '${((1 - incomeRatio) * 100).round()}%', AppColors.expense),
             ],
-          );
-        }).toList(),
+          ),
+        ],
       ),
     );
   }
-}
 
-class _StatsRow extends StatelessWidget {
-  final double income;
-  final double expense;
-  final String currency;
-
-  const _StatsRow({required this.income, required this.expense, required this.currency});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _flowLegend(IconData icon, String label, String pct, Color color) {
     return Row(
       children: [
-        Expanded(
-          child: GlassCard(
-            padding: const EdgeInsets.all(20),
-            borderRadius: 20,
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.income.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.trending_down_rounded, color: AppColors.income, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Income',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      Text(
-                        '${Formatters.compactAmount(income)} $currency',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: GlassCard(
-            padding: const EdgeInsets.all(20),
-            borderRadius: 20,
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.expense.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.trending_up_rounded, color: AppColors.expense, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Expense',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      Text(
-                        '${Formatters.compactAmount(expense)} $currency',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(fontSize: 11, color: AppColors.textSecondary.withValues(alpha: 0.7))),
+        const SizedBox(width: 4),
+        Text(pct, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
       ],
     );
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  final String label;
+class _WalletGrid extends StatelessWidget {
+  final List<Wallet> wallets;
+  final List<Transaction> transactions;
+  final String currency;
 
-  const _SectionLabel(this.label);
+  const _WalletGrid({required this.wallets, required this.transactions, required this.currency});
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        color: AppColors.textPrimary,
-      ),
+    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
+
+    if (wallets.isEmpty) {
+      return GlassCard(
+        padding: const EdgeInsets.all(24),
+        borderRadius: 20,
+        child: Center(child: Text('No wallets', style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.7)))),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.account_balance_wallet_rounded, size: 16, color: AppColors.primaryBlue),
+            const SizedBox(width: 6),
+            Text('Wallets', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary.withValues(alpha: 0.9))),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...wallets.map((w) {
+          final cashIn = transactions
+              .where((t) => t.paymentType == w.name && t.type == TransactionType.income)
+              .fold<double>(0, (s, t) => s + t.amount);
+          final cashOut = transactions
+              .where((t) => t.paymentType == w.name && t.type == TransactionType.expense)
+              .fold<double>(0, (s, t) => s + t.amount);
+          final color = WalletHelper.colorFor(w.name);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: GlassCard(
+              padding: const EdgeInsets.all(14),
+              borderRadius: 16,
+              child: Row(
+                children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(WalletHelper.iconFor(w.name), size: 20, color: color),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(w.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        const SizedBox(height: 2),
+                        Text('Balance: ${fmt.format(w.balance)} $currency',
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary.withValues(alpha: 0.8))),
+                      ],
+                    ),
+                  ),
+                  if (cashIn > 0 || cashOut > 0)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (cashIn > 0)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.arrow_downward_rounded, size: 10, color: AppColors.income),
+                              const SizedBox(width: 2),
+                              Text('+${fmt.format(cashIn)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.income)),
+                            ],
+                          ),
+                        if (cashOut > 0)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.arrow_upward_rounded, size: 10, color: AppColors.expense),
+                              const SizedBox(width: 2),
+                              Text('-${fmt.format(cashOut)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.expense)),
+                            ],
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
     );
   }
 }
 
-Map<String, double> _bucketCategories(Map<String, double> categoryMap, double total) {
-  final sorted = categoryMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-  final major = <MapEntry<String, double>>[];
-  double othersSum = 0;
-  for (final e in sorted) {
-    final pct = total > 0 ? e.value / total * 100 : 0;
-    if (pct < 1) {
-      othersSum += e.value;
-    } else {
-      major.add(e);
-    }
-  }
-  if (othersSum > 0) {
-    major.add(MapEntry('Everything else', othersSum));
-  }
-  return {for (final e in major) e.key: e.value};
-}
-
-class _CategoryBreakdown extends StatelessWidget {
-  final Map<String, double> categoryMap;
-  final double total;
+class _TodayTxnsList extends StatelessWidget {
+  final List<Transaction> transactions;
   final String currency;
 
-  const _CategoryBreakdown({
-    required this.categoryMap,
-    required this.total,
-    required this.currency,
-  });
+  const _TodayTxnsList({required this.transactions, required this.currency});
 
   @override
   Widget build(BuildContext context) {
-    if (categoryMap.isEmpty) {
-      return GlassCard(
-        padding: const EdgeInsets.all(40),
-        borderRadius: 20,
-        child: Center(
-          child: Text(
-            'No data to analyze',
-            style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.7)),
-          ),
+    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.receipt_long_rounded, size: 16, color: AppColors.primaryBlue),
+            const SizedBox(width: 6),
+            Text('Today\'s Transactions', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary.withValues(alpha: 0.9))),
+            const Spacer(),
+            Text('${transactions.length}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primaryBlue)),
+          ],
         ),
-      );
-    }
-
-    final bucketed = _bucketCategories(categoryMap, total);
-    final entries = bucketed.entries.toList();
-
-    final chartColors = [
-      AppColors.primaryBlue,
-      AppColors.violetHint,
-      AppColors.lightCyan,
-      AppColors.skyBlue,
-      AppColors.violetLight,
-      AppColors.income,
-    ];
-
-    return GlassCard(
-      padding: const EdgeInsets.all(24),
-      borderRadius: 24,
-      child: Column(
-        children: [
-          SizedBox(
-            height: 160,
-            child: PieChart(
-              PieChartData(
-                sections: entries.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final data = entry.value;
-                  final percentage = total > 0 ? (data.value / total * 100) : 0.0;
-                  final isOthers = data.key == 'Everything else';
-                  return PieChartSectionData(
-                    color: isOthers ? AppColors.textTertiary : chartColors[idx % chartColors.length],
-                    value: data.value,
-                    title: '${percentage.toStringAsFixed(0)}%',
-                    titleStyle: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    radius: 55,
-                  );
-                }).toList(),
-                centerSpaceRadius: 35,
-                sectionsSpace: 2,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          ...entries.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final data = entry.value;
-            final percentage = total > 0 ? (data.value / total * 100) : 0.0;
-            final isOthers = data.key == 'Everything else';
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 14),
+        const SizedBox(height: 12),
+        if (transactions.isEmpty)
+          GlassCard(
+            padding: const EdgeInsets.all(32),
+            borderRadius: 20,
+            child: Center(
               child: Column(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
+                  Icon(Icons.inbox_rounded, size: 36, color: AppColors.textSecondary.withValues(alpha: 0.3)),
+                  const SizedBox(height: 8),
+                  Text('No transactions today', style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.5), fontSize: 13)),
+                ],
+              ),
+            ),
+          )
+        else
+          ...transactions.reversed.take(10).map((txn) {
+            final isIncome = txn.type == TransactionType.income;
+            final color = isIncome ? AppColors.income : AppColors.expense;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: GlassCard(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                borderRadius: 14,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(isIncome ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                        size: 18, color: color),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: isOthers ? AppColors.textTertiary : chartColors[idx % chartColors.length],
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            data.key,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textPrimary,
-                              fontStyle: isOthers ? FontStyle.italic : FontStyle.normal,
-                            ),
-                          ),
+                          Text(txn.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                          if (txn.paymentType != null)
+                            Text(txn.paymentType!, style: TextStyle(fontSize: 11, color: AppColors.textSecondary.withValues(alpha: 0.7))),
                         ],
                       ),
-                      Text(
-                        '${Formatters.compactAmount(data.value)} $currency',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: percentage / 100,
-                      backgroundColor: (isOthers ? AppColors.textTertiary : chartColors[idx % chartColors.length]).withValues(alpha: 0.12),
-                      valueColor: AlwaysStoppedAnimation(
-                        isOthers ? AppColors.textTertiary : chartColors[idx % chartColors.length],
-                      ),
-                      minHeight: 6,
                     ),
-                  ),
-                ],
+                    Text(
+                      '${isIncome ? '+' : '-'}${fmt.format(txn.amount)}',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
+                    ),
+                  ],
+                ),
               ),
             );
           }),
-        ],
-      ),
+      ],
     );
   }
 }

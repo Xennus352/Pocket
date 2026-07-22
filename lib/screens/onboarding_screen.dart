@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../config/colors.dart';
 import '../models/user_profile.dart';
 import '../models/transaction.dart';
+import '../models/wallet.dart';
 import '../providers/user_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../widgets/glass_card.dart';
@@ -589,11 +590,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
       return;
     }
+    final wallets = _selectedWallets.map((name) => Wallet(name: name, balance: 0)).toList();
     final profile = UserProfile(
       name: _nameController.text.trim().isEmpty ? 'Captain' : _nameController.text.trim(),
       currency: _currency,
       startingBalance: startBalance,
-      wallets: _selectedWallets.toList(),
+      wallets: wallets,
     );
 
     final txnProvider = context.read<TransactionProvider>();

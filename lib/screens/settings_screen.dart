@@ -393,14 +393,11 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
-  final Widget? trailing;
-
   const _SettingsTile({
     required this.icon,
     required this.title,
     required this.subtitle,
     this.onTap,
-    this.trailing,
   });
 
   @override
@@ -452,8 +449,7 @@ class _SettingsTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  ?trailing,
-                  if (trailing == null && onTap != null)
+                  if (onTap != null)
                     Icon(Icons.chevron_right_rounded,
                         color: AppColors.textTertiary.withValues(alpha: 0.5),
                         size: 20),

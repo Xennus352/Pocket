@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
+import '../models/wallet.dart';
 import '../services/database_service.dart';
 
 class UserProvider extends ChangeNotifier {
@@ -56,8 +57,19 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateWallets(List<String> wallets) async {
+  Future<void> updateWallets(List<Wallet> wallets) async {
     _profile.wallets = wallets;
+    await _db.saveUserProfile(_profile);
+    notifyListeners();
+  }
+
+  Future<void> updateWalletBalance(String walletName, double amount, {bool isIncome = false}) async {
+    for (final w in _profile.wallets) {
+      if (w.name == walletName) {
+        w.balance += isIncome ? amount : -amount;
+        break;
+      }
+    }
     await _db.saveUserProfile(_profile);
     notifyListeners();
   }
