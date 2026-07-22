@@ -6,6 +6,7 @@ import '../config/colors.dart';
 import '../models/transaction.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/user_provider.dart';
+import '../utils/formatters.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/glass_button.dart';
 import '../widgets/glass_transition.dart';
@@ -52,10 +53,15 @@ class HomeScreen extends StatelessWidget {
                           _Header(userProvider: userProvider),
                           const SizedBox(height: 20),
                           GlassWalletCard(
-                            balance: txnProvider.balance < 0
-                                ? 'Insufficient'
-                                : '${fmt.format(txnProvider.balance)} $currency',
+                            balance: '${fmt.format(txnProvider.balance)} $currency',
                             sources: userProvider.profile.wallets,
+                          ),
+                          const SizedBox(height: 12),
+                          _TmpiRow(
+                            balance: txnProvider.balance,
+                            tmpi: txnProvider.tmpi,
+                            balancePlusTmpi: txnProvider.balancePlusTmpi,
+                            currency: currency,
                           ),
                           const SizedBox(height: 16),
                           _BudgetProgress(
@@ -74,6 +80,7 @@ class HomeScreen extends StatelessWidget {
                             expense: txnProvider.totalExpense,
                             currency: currency,
                           ),
+                          _TransactionCountTile(count: txnProvider.totalTransactionCount),
                           const SizedBox(height: 28),
                           _SectionLabel(
                             label: 'Recent Transactions',
@@ -583,6 +590,101 @@ class _QuickActions extends StatelessWidget {
   }
 }
 
+class _TmpiRow extends StatelessWidget {
+  final double balance;
+  final double tmpi;
+  final double balancePlusTmpi;
+  final String currency;
+
+  const _TmpiRow({
+    required this.balance,
+    required this.tmpi,
+    required this.balancePlusTmpi,
+    required this.currency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          _TmpiItem(label: 'Balance', amount: '${fmt.format(balance)} $currency', color: AppColors.primaryBlue),
+          Container(height: 30, width: 1, color: AppColors.textTertiary.withValues(alpha: 0.2)),
+          _TmpiItem(label: 'TMPI', amount: '${fmt.format(tmpi)} $currency', color: AppColors.violetHint),
+          Container(height: 30, width: 1, color: AppColors.textTertiary.withValues(alpha: 0.2)),
+          _TmpiItem(label: 'Balance+TMPI', amount: '${fmt.format(balancePlusTmpi)} $currency', color: AppColors.income),
+        ],
+      ),
+    );
+  }
+}
+
+class _TmpiItem extends StatelessWidget {
+  final String label;
+  final String amount;
+  final Color color;
+
+  const _TmpiItem({required this.label, required this.amount, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+          const SizedBox(height: 2),
+          Text(amount, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color), overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransactionCountTile extends StatelessWidget {
+  final int count;
+
+  const _TransactionCountTile({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.receipt_long_rounded, color: AppColors.primaryBlue, size: 18),
+          ),
+          const SizedBox(width: 12),
+          const Text('Total Transactions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+          const Spacer(),
+          Text(
+            Formatters.compactAmount(count.toDouble()),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MonthlyOverview extends StatelessWidget {
   final double income;
   final double expense;
@@ -639,14 +741,14 @@ class _MonthlyOverview extends StatelessWidget {
             children: [
               _StatItem(
                 label: 'Income',
-                amount: '+${fmt.format(income)} $currency',
+                amount: '+${Formatters.compactAmount(income)} $currency',
                 color: AppColors.income,
                 icon: Icons.arrow_downward_rounded,
               ),
               const SizedBox(width: 12),
               _StatItem(
                 label: 'Expense',
-                amount: '-${fmt.format(expense)} $currency',
+                amount: '-${Formatters.compactAmount(expense)} $currency',
                 color: AppColors.expense,
                 icon: Icons.arrow_upward_rounded,
               ),
@@ -683,18 +785,18 @@ class _MonthlyOverview extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Savings',
+                    'Monthly Savings',
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary.withValues(alpha: 0.8),
                     ),
                   ),
                   Text(
-                    saving < 0 ? 'Insufficient' : '${fmt.format(saving)} $currency',
-                    style: const TextStyle(
+                    '${saving < 0 ? '-' : ''}${fmt.format(saving.abs())} $currency',
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: saving < 0 ? AppColors.expense : AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -845,6 +947,25 @@ class _TransactionTimelineTileState extends State<_TransactionTimelineTile>
     super.dispose();
   }
 
+  void _togglePaid() async {
+    final updated = Transaction(
+      id: widget.txn.id,
+      title: widget.txn.title,
+      amount: widget.txn.amount,
+      type: widget.txn.type,
+      category: widget.txn.category,
+      date: widget.txn.date,
+      note: widget.txn.note,
+      agentTxnType: widget.txn.agentTxnType,
+      commission: widget.txn.commission,
+      customerName: widget.txn.customerName,
+      paymentType: widget.txn.paymentType,
+      isPaid: !widget.txn.isPaid,
+      edited: true,
+    );
+    await context.read<TransactionProvider>().updateTransaction(updated);
+  }
+
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
@@ -852,144 +973,172 @@ class _TransactionTimelineTileState extends State<_TransactionTimelineTile>
     final amount =
         '${isIncome ? '+' : '-'}${fmt.format(widget.txn.amount)} ${widget.currency}';
 
-    final categoryIcons = {
-      'Food & Drinks': Icons.restaurant_rounded,
-      'Shopping': Icons.shopping_bag_rounded,
-      'Transport': Icons.directions_car_rounded,
-      'Entertainment': Icons.movie_rounded,
-      'Bills & Utilities': Icons.receipt_rounded,
-      'Health': Icons.favorite_rounded,
-      'Education': Icons.school_rounded,
-      'Salary': Icons.work_rounded,
-      'Freelance': Icons.laptop_rounded,
-      'Transfer': Icons.swap_horiz_rounded,
-      'Other': Icons.more_horiz_rounded,
-    };
-    final icon = categoryIcons[widget.txn.category] ?? Icons.circle;
+    final paymentIcon = WalletHelper.iconFor(widget.txn.paymentType ?? '');
 
     return SlideTransition(
       position: _slideAnim,
       child: FadeTransition(
         opacity: _fadeAnim,
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: 32,
-                child: Column(
-                  children: [
-                    Container(
-                      width: 12,
-                      height: 12,
-                      margin: const EdgeInsets.only(top: 18),
-                      decoration: BoxDecoration(
-                        color:
-                            isIncome ? AppColors.income : AppColors.expense,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: (isIncome
-                                    ? AppColors.income
-                                    : AppColors.expense)
-                                .withValues(alpha: 0.3),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Container(
-                        width: 2,
-                        color: AppColors.textTertiary.withValues(alpha: 0.15),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 2),
-                  padding: const EdgeInsets.fromLTRB(12, 12, 16, 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        width: 1),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
+        child: GestureDetector(
+          onLongPress: _togglePaid,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: 32,
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        margin: const EdgeInsets.only(top: 18),
+                        decoration: BoxDecoration(
+                          color:
+                              isIncome ? AppColors.income : AppColors.expense,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
                               color: (isIncome
                                       ? AppColors.income
                                       : AppColors.expense)
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
+                                  .withValues(alpha: 0.3),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
                             ),
-                            child: Icon(icon,
-                                color: isIncome
-                                    ? AppColors.income
-                                    : AppColors.expense,
-                                size: 18),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(widget.txn.title,
-                                    style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary),
-                                    overflow: TextOverflow.ellipsis),
-                                const SizedBox(height: 1),
-                                Text(widget.txn.category,
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.textSecondary
-                                            .withValues(alpha: 0.8))),
-                              ],
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Container(
+                          width: 2,
+                          color: AppColors.textTertiary.withValues(alpha: 0.15),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 2),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 16, 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          width: 1),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: (isIncome
+                                        ? AppColors.income
+                                        : AppColors.expense)
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(paymentIcon,
+                                  color: isIncome
+                                      ? AppColors.income
+                                      : AppColors.expense,
+                                  size: 18),
                             ),
-                          ),
-                          Flexible(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(amount,
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: isIncome
-                                            ? AppColors.income
-                                            : AppColors.expense),
-                                    overflow: TextOverflow.ellipsis),
-                                Text(
-                                    DateFormat('MMM d')
-                                        .format(widget.txn.date),
-                                    style: TextStyle(
-                                        fontSize: 10,
-                                        color: AppColors.textTertiary
-                                            .withValues(alpha: 0.8))),
-                              ],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(widget.txn.title,
+                                      style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary),
+                                      overflow: TextOverflow.ellipsis),
+                                  const SizedBox(height: 1),
+                                  Row(
+                                    children: [
+                                      if (widget.txn.paymentType != null)
+                                        Flexible(
+                                          child: Text(
+                                            widget.txn.paymentType!,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500,
+                                              color: AppColors.primaryBlue,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: (widget.txn.isPaid ? AppColors.income : AppColors.expense).withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          widget.txn.isPaid ? 'Paid' : 'Not Paid',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: widget.txn.isPaid ? AppColors.income : AppColors.expense,
+                                          ),
+                                        ),
+                                      ),
+                                      if (widget.txn.edited) ...[
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '(edited)',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            color: AppColors.textTertiary.withValues(alpha: 0.7),
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(amount,
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: isIncome
+                                              ? AppColors.income
+                                              : AppColors.expense),
+                                      overflow: TextOverflow.ellipsis),
+                                  Text(
+                                      DateFormat('MMM d')
+                                          .format(widget.txn.date),
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.textTertiary
+                                              .withValues(alpha: 0.8))),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1079,7 +1228,7 @@ class _BudgetProgress extends StatelessWidget {
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
     final ratio = budget > 0 ? (spent / budget).clamp(0.0, 1.0).toDouble() : 0.0;
     final remaining = budget - spent;
-    final remainingFmt = remaining < 0 ? 'Insufficient' : '${fmt.format(remaining)} $currency';
+    final remainingFmt = '${remaining < 0 ? '-' : ''}${fmt.format(remaining.abs())} $currency';
 
     return Container(
       padding: const EdgeInsets.all(16),

@@ -9,6 +9,9 @@ class Transaction {
   final AgentTransactionType? agentTxnType;
   final double commission;
   final String? customerName;
+  final String? paymentType;
+  final bool isPaid;
+  final bool edited;
 
   Transaction({
     this.id,
@@ -21,6 +24,9 @@ class Transaction {
     this.agentTxnType,
     this.commission = 0,
     this.customerName,
+    this.paymentType,
+    this.isPaid = true,
+    this.edited = false,
   });
 
   bool get isAgent => agentTxnType != null && agentTxnType != AgentTransactionType.none;
@@ -35,6 +41,9 @@ class Transaction {
         'agent_txn_type': agentTxnType?.name,
         'commission': commission,
         'customer_name': customerName,
+        'payment_type': paymentType,
+        'is_paid': isPaid ? 1 : 0,
+        'edited': edited ? 1 : 0,
       };
 
   factory Transaction.fromMap(Map<String, dynamic> map) {
@@ -54,6 +63,9 @@ class Transaction {
           : null,
       commission: (map['commission'] as num?)?.toDouble() ?? 0,
       customerName: map['customer_name'] as String?,
+      paymentType: map['payment_type'] as String?,
+      isPaid: (map['is_paid'] as int?) == 1,
+      edited: (map['edited'] as int?) == 1,
     );
   }
 }

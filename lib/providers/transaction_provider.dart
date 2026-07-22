@@ -3,6 +3,22 @@ import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import '../services/database_service.dart';
 
+class BalanceImpactResult {
+  final bool hasNoBalance;
+  final bool willBeInsufficient;
+  final bool isBigChange;
+  final double currentBalance;
+  final double newBalance;
+
+  const BalanceImpactResult({
+    required this.hasNoBalance,
+    required this.willBeInsufficient,
+    required this.isBigChange,
+    required this.currentBalance,
+    required this.newBalance,
+  });
+}
+
 class TransactionProvider extends ChangeNotifier {
   final DatabaseService _db = DatabaseService();
 
@@ -11,6 +27,8 @@ class TransactionProvider extends ChangeNotifier {
   double _totalIncome = 0;
   double _totalExpense = 0;
   Map<String, double> _expenseByCategory = {};
+  Map<String, double> _incomeByCategory = {};
+  int _totalTransactionCount = 0;
   bool _loading = false;
   bool _initialized = false;
   String? _error;
@@ -22,6 +40,10 @@ class TransactionProvider extends ChangeNotifier {
   double get totalIncome => _totalIncome;
   double get totalExpense => _totalExpense;
   Map<String, double> get expenseByCategory => _expenseByCategory;
+  Map<String, double> get incomeByCategory => _incomeByCategory;
+  int get totalTransactionCount => _totalTransactionCount;
+  double get tmpi => _balance * 30;
+  double get balancePlusTmpi => _balance + tmpi;
   bool get loading => _loading;
   bool get initialized => _initialized;
   String? get error => _error;
@@ -32,6 +54,33 @@ class TransactionProvider extends ChangeNotifier {
   double get monthlyExpense => _transactions
       .where((t) => t.type == TransactionType.expense)
       .fold<double>(0, (sum, t) => sum + t.amount);
+
+  BalanceImpactResult checkBalanceImpact({
+    required double amount,
+    required TransactionType type,
+    required double warningThresholdPercent,
+  }) {
+    if (type == TransactionType.income) {
+      return const BalanceImpactResult(
+        hasNoBalance: false,
+        willBeInsufficient: false,
+        isBigChange: false,
+        currentBalance: 0,
+        newBalance: 0,
+      );
+    }
+    final hasNoBalance = _balance <= 0;
+    final newBalance = _balance - amount;
+    final willBeInsufficient = newBalance < 0;
+    final isBigChange = hasNoBalance || (amount >= _balance * warningThresholdPercent / 100);
+    return BalanceImpactResult(
+      hasNoBalance: hasNoBalance,
+      willBeInsufficient: willBeInsufficient,
+      isBigChange: isBigChange,
+      currentBalance: _balance,
+      newBalance: newBalance,
+    );
+  }
 
   Future<void> init() async {
     _loading = true;
@@ -59,6 +108,11 @@ class TransactionProvider extends ChangeNotifier {
         DateTime(_currentYear, _currentMonth, 1),
         DateTime(_currentYear, _currentMonth + 1, 1),
       );
+      _incomeByCategory = await _db.getIncomeByCategory(
+        DateTime(_currentYear, _currentMonth, 1),
+        DateTime(_currentYear, _currentMonth + 1, 1),
+      );
+      _totalTransactionCount = await _db.getTransactionCount();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -75,6 +129,16 @@ class TransactionProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
       return false;
+    }
+  }
+
+  Future<void> updateTransaction(Transaction txn) async {
+    try {
+      await _db.updateTransaction(txn);
+      await loadData();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
     }
   }
 

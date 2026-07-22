@@ -4,6 +4,7 @@ class UserProfile {
   double startingBalance;
   double monthlyBudget;
   List<String> wallets;
+  double warningThresholdPercent;
 
   UserProfile({
     this.name = 'Captain',
@@ -11,6 +12,7 @@ class UserProfile {
     this.startingBalance = 0,
     this.monthlyBudget = 1000000,
     List<String>? wallets,
+    this.warningThresholdPercent = 20,
   }) : wallets = wallets ?? ['KPay', 'WavePay', 'Cash'];
 
   String get greeting {
@@ -26,6 +28,7 @@ class UserProfile {
         'starting_balance': startingBalance,
         'monthly_budget': monthlyBudget,
         'wallets': wallets.join(','),
+        'warning_threshold_percent': warningThresholdPercent,
         'id': 1,
       };
 
@@ -35,5 +38,6 @@ class UserProfile {
         startingBalance: (map['starting_balance'] as num?)?.toDouble() ?? 0,
         monthlyBudget: (map['monthly_budget'] as num?)?.toDouble() ?? 1000000,
         wallets: (map['wallets'] as String? ?? 'KPay,WavePay,Cash').split(','),
+        warningThresholdPercent: (map['warning_threshold_percent'] as num?)?.toDouble() ?? 20,
       );
 }

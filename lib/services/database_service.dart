@@ -58,6 +58,21 @@ class DatabaseService extends DatabaseServiceBase {
   }
 
   @override
+  Future<Map<String, double>> getIncomeByCategory(DateTime start, DateTime end) async {
+    return await _sqlite.getIncomeByCategory(start, end);
+  }
+
+  @override
+  Future<int> getTransactionCount() async {
+    return await _sqlite.getTransactionCount();
+  }
+
+  @override
+  Future<void> updateTransaction(Transaction txn) async {
+    await _sqlite.updateTransaction(txn);
+  }
+
+  @override
   Future<void> deleteTransaction(int id) async {
     await _sqlite.deleteTransaction(id);
   }

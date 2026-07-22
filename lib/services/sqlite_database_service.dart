@@ -23,7 +23,7 @@ class SqliteDatabaseService extends DatabaseServiceBase {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       join(dbPath, 'my_expense.db'),
-      version: 5,
+      version: 7,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE transactions (
@@ -36,7 +36,10 @@ class SqliteDatabaseService extends DatabaseServiceBase {
             note TEXT,
             agent_txn_type TEXT,
             commission REAL NOT NULL DEFAULT 0,
-            customer_name TEXT
+            customer_name TEXT,
+            payment_type TEXT,
+            is_paid INTEGER NOT NULL DEFAULT 1,
+            edited INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
@@ -46,7 +49,8 @@ class SqliteDatabaseService extends DatabaseServiceBase {
             currency TEXT NOT NULL DEFAULT 'MMK',
             starting_balance REAL NOT NULL DEFAULT 0,
             monthly_budget REAL NOT NULL DEFAULT 1000000,
-            wallets TEXT NOT NULL DEFAULT 'KPay,WavePay,Cash'
+            wallets TEXT NOT NULL DEFAULT 'KPay,WavePay,Cash',
+            warning_threshold_percent REAL NOT NULL DEFAULT 20
           )
         ''');
         await db.insert('user_settings', {
@@ -56,6 +60,7 @@ class SqliteDatabaseService extends DatabaseServiceBase {
           'starting_balance': 0,
           'monthly_budget': 1000000,
           'wallets': 'KPay,WavePay,Cash',
+          'warning_threshold_percent': 20,
         });
         await db.execute('''
           CREATE TABLE customers (
@@ -111,6 +116,22 @@ class SqliteDatabaseService extends DatabaseServiceBase {
             ALTER TABLE user_settings ADD COLUMN monthly_budget REAL NOT NULL DEFAULT 1000000
           ''');
         }
+        if (oldVersion < 6) {
+          await db.execute('''
+            ALTER TABLE transactions ADD COLUMN payment_type TEXT
+          ''');
+          await db.execute('''
+            ALTER TABLE transactions ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 1
+          ''');
+          await db.execute('''
+            ALTER TABLE user_settings ADD COLUMN warning_threshold_percent REAL NOT NULL DEFAULT 20
+          ''');
+        }
+        if (oldVersion < 7) {
+          await db.execute('''
+            ALTER TABLE transactions ADD COLUMN edited INTEGER NOT NULL DEFAULT 0
+          ''');
+        }
       },
     );
   }
@@ -127,6 +148,9 @@ class SqliteDatabaseService extends DatabaseServiceBase {
       'agent_txn_type': txn.agentTxnType?.name,
       'commission': txn.commission,
       'customer_name': txn.customerName,
+      'payment_type': txn.paymentType,
+      'is_paid': txn.isPaid ? 1 : 0,
+      'edited': txn.edited ? 1 : 0,
     });
     return id;
   }
@@ -240,6 +264,47 @@ class SqliteDatabaseService extends DatabaseServiceBase {
       [start.toIso8601String(), end.toIso8601String()],
     );
     return {for (final row in results) row['category'] as String: (row['total'] as num).toDouble()};
+  }
+
+  @override
+  Future<Map<String, double>> getIncomeByCategory(DateTime start, DateTime end) async {
+    final results = await _ensureDb().rawQuery(
+      '''SELECT category, SUM(amount) as total
+         FROM transactions
+         WHERE type = 'income' AND date >= ? AND date < ?
+         GROUP BY category ORDER BY total DESC''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return {for (final row in results) row['category'] as String: (row['total'] as num).toDouble()};
+  }
+
+  @override
+  Future<int> getTransactionCount() async {
+    final result = await _ensureDb().rawQuery('SELECT COUNT(*) as count FROM transactions');
+    return (result.first['count'] as int);
+  }
+
+  @override
+  Future<void> updateTransaction(Transaction txn) async {
+    await _ensureDb().update(
+      'transactions',
+      {
+        'title': txn.title,
+        'amount': txn.amount,
+        'type': txn.type.name,
+        'category': txn.category,
+        'date': txn.date.toIso8601String(),
+        'note': txn.note,
+        'agent_txn_type': txn.agentTxnType?.name,
+        'commission': txn.commission,
+        'customer_name': txn.customerName,
+        'payment_type': txn.paymentType,
+        'is_paid': txn.isPaid ? 1 : 0,
+        'edited': txn.edited ? 1 : 0,
+      },
+      where: 'id = ?',
+      whereArgs: [txn.id],
+    );
   }
 
   @override

@@ -73,4 +73,10 @@ class UserProvider extends ChangeNotifier {
     await _db.saveUserProfile(_profile);
     notifyListeners();
   }
+
+  Future<void> updateWarningThreshold(double percent) async {
+    _profile.warningThresholdPercent = percent;
+    await _db.saveUserProfile(_profile);
+    notifyListeners();
+  }
 }

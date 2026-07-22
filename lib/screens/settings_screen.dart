@@ -54,6 +54,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildCurrencyTile(context, profile.currency, userProvider),
             const SizedBox(height: 12),
             _buildBudgetTile(context, userProvider),
+            const SizedBox(height: 12),
+            _buildWarningThresholdTile(context, userProvider),
             const SizedBox(height: 28),
             _SectionTitle(title: 'About'),
             const SizedBox(height: 12),
@@ -100,6 +102,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
       title: 'Monthly Budget',
       subtitle: '${fmt.format(userProvider.profile.monthlyBudget)} ${userProvider.profile.currency}',
       onTap: () => _editBudget(context, userProvider),
+    );
+  }
+
+  Widget _buildWarningThresholdTile(BuildContext context, UserProvider userProvider) {
+    return _SettingsTile(
+      icon: Icons.warning_amber_rounded,
+      title: 'Big-change Sensitivity',
+      subtitle: '${userProvider.profile.warningThresholdPercent.toStringAsFixed(0)}% of balance',
+      onTap: () => _editWarningThreshold(context, userProvider),
+    );
+  }
+
+  void _editWarningThreshold(BuildContext context, UserProvider userProvider) {
+    final current = userProvider.profile.warningThresholdPercent;
+    double value = current;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          backgroundColor: Colors.white.withValues(alpha: 0.95),
+          title: const Text('Big-change Sensitivity',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'When an expense exceeds this % of your balance, a warning will appear.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '${value.toStringAsFixed(0)}%',
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryBlue,
+                ),
+              ),
+              Slider(
+                value: value,
+                min: 1,
+                max: 100,
+                divisions: 99,
+                label: '${value.toStringAsFixed(0)}%',
+                onChanged: (v) => setDialogState(() => value = v),
+              ),
+              const Text('1% — 100%', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                userProvider.updateWarningThreshold(value);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

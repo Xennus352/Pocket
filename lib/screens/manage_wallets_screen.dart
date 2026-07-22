@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/colors.dart';
 import '../providers/user_provider.dart';
+import '../utils/formatters.dart';
 
 class ManageWalletsScreen extends StatefulWidget {
   const ManageWalletsScreen({super.key});
@@ -12,11 +13,6 @@ class ManageWalletsScreen extends StatefulWidget {
 }
 
 class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
-  final _walletColors = {
-    'KPay': const Color(0xFF007AFF),
-    'WavePay': const Color(0xFF00A651),
-    'Cash': const Color(0xFFFF9500),
-  };
 
   void _addWallet() {
     final controller = TextEditingController();
@@ -55,6 +51,17 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
             onPressed: () {
               if (controller.text.trim().isNotEmpty) {
                 final userProvider = context.read<UserProvider>();
+                if (userProvider.profile.wallets.length >= 8) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Maximum 8 wallets allowed'),
+                      backgroundColor: AppColors.warning,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  Navigator.pop(ctx);
+                  return;
+                }
                 final wallets = List<String>.from(userProvider.profile.wallets)
                   ..add(controller.text.trim());
                 userProvider.updateWallets(wallets);
@@ -102,15 +109,9 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
             const SizedBox(height: 12),
             ...wallets.map((w) => _WalletTile(
                   name: w,
-                  color: _walletColors[w] ?? AppColors.primaryBlue,
+                  color: WalletHelper.colorFor(w),
                   onDelete: wallets.length > 1 ? () => _deleteWallet(w) : null,
-                  icon: w == 'KPay'
-                      ? Icons.phone_iphone_rounded
-                      : w == 'WavePay'
-                          ? Icons.mobile_friendly_rounded
-                          : w == 'Cash'
-                              ? Icons.money_rounded
-                              : Icons.account_balance_wallet_rounded,
+                  icon: WalletHelper.iconFor(w),
                 )),
             const SizedBox(height: 20),
             Center(

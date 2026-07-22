@@ -6,6 +6,7 @@ import '../config/colors.dart';
 import '../models/transaction.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/user_provider.dart';
+import '../utils/formatters.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -115,6 +116,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                   itemBuilder: (context, index) {
                     final txn = filtered[index];
                     return _HistoryTile(
+                      key: ValueKey(txn.id),
                       txn: txn,
                       currency: currency,
                       fmt: fmt,
@@ -259,10 +261,30 @@ class _HistoryTile extends StatelessWidget {
   final NumberFormat fmt;
 
   const _HistoryTile({
+    super.key,
     required this.txn,
     required this.currency,
     required this.fmt,
   });
+
+  void _togglePaid(BuildContext context) {
+    final updated = Transaction(
+      id: txn.id,
+      title: txn.title,
+      amount: txn.amount,
+      type: txn.type,
+      category: txn.category,
+      date: txn.date,
+      note: txn.note,
+      agentTxnType: txn.agentTxnType,
+      commission: txn.commission,
+      customerName: txn.customerName,
+      paymentType: txn.paymentType,
+      isPaid: !txn.isPaid,
+      edited: true,
+    );
+    context.read<TransactionProvider>().updateTransaction(updated);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -270,96 +292,120 @@ class _HistoryTile extends StatelessWidget {
     final amount =
         '${isIncome ? '+' : '-'}${fmt.format(txn.amount)} $currency';
 
-    final categoryIcons = {
-      'Food': Icons.restaurant_rounded,
-      'Transport': Icons.directions_car_rounded,
-      'Shopping': Icons.shopping_bag_rounded,
-      'Bills': Icons.receipt_rounded,
-      'Other': Icons.more_horiz_rounded,
-      'Cash-In': Icons.add_card_rounded,
-      'Cash-Out': Icons.money_off_rounded,
-      'Transfer': Icons.swap_horiz_rounded,
-      'Bill Payment': Icons.receipt_rounded,
-      'Top-Up': Icons.phone_iphone_rounded,
-    };
-    final icon = categoryIcons[txn.category] ?? Icons.circle;
+    final paymentIcon = WalletHelper.iconFor(txn.paymentType ?? '');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: (isIncome ? AppColors.income : AppColors.expense)
-                        .withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+      child: GestureDetector(
+        onLongPress: () => _togglePaid(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: (isIncome ? AppColors.income : AppColors.expense)
+                          .withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(paymentIcon,
+                        color: isIncome ? AppColors.income : AppColors.expense,
+                        size: 20),
                   ),
-                  child: Icon(icon,
-                      color: isIncome ? AppColors.income : AppColors.expense,
-                      size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(txn.title,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary)),
+                        const SizedBox(height: 1),
+                        Row(
+                          children: [
+                            if (txn.paymentType != null)
+                              Flexible(
+                                child: Text(
+                                  txn.paymentType!,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.primaryBlue,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: (txn.isPaid ? AppColors.income : AppColors.expense).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                txn.isPaid ? 'Paid' : 'Not Paid',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: txn.isPaid ? AppColors.income : AppColors.expense,
+                                ),
+                              ),
+                            ),
+                            if (txn.edited) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                '(edited)',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: AppColors.textTertiary.withValues(alpha: 0.7),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(txn.title,
-                          style: const TextStyle(
+                      Text(amount,
+                          style: TextStyle(
                               fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary)),
-                      const SizedBox(height: 1),
-                      Row(
-                        children: [
-                          Text(txn.category,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary
-                                      .withValues(alpha: 0.8))),
-                          const SizedBox(width: 8),
-                          Text(
-                              DateFormat('MMM d, yyyy').format(txn.date),
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textTertiary
-                                      .withValues(alpha: 0.8))),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(amount,
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: isIncome
-                                ? AppColors.income
-                                : AppColors.expense)),
-                    if (txn.commission > 0)
-                      Text('Comm: ${fmt.format(txn.commission)} $currency',
+                              fontWeight: FontWeight.bold,
+                              color: isIncome
+                                  ? AppColors.income
+                                  : AppColors.expense)),
+                      if (txn.commission > 0)
+                        Text('Comm: ${fmt.format(txn.commission)} $currency',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: AppColors.textTertiary
+                                    .withValues(alpha: 0.8))),
+                      Text(
+                          DateFormat('MMM d, yyyy').format(txn.date),
                           style: TextStyle(
                               fontSize: 10,
                               color: AppColors.textTertiary
                                   .withValues(alpha: 0.8))),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -1,20 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../config/colors.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/user_provider.dart';
+import '../utils/formatters.dart';
 import '../widgets/glass_card.dart';
 
-class AnalyticsScreen extends StatelessWidget {
+class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
+
+  @override
+  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+}
+
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  String _selectedType = 'Expense';
 
   @override
   Widget build(BuildContext context) {
     return Consumer2<TransactionProvider, UserProvider>(
       builder: (context, provider, userProvider, _) {
         final currency = userProvider.profile.currency;
+        final categoryMap = _selectedType == 'Expense'
+            ? provider.expenseByCategory
+            : provider.incomeByCategory;
+        final total = categoryMap.values.fold(0.0, (a, b) => a + b);
+
         return Scaffold(
           body: SafeArea(
             child: ListView(
@@ -22,8 +34,14 @@ class AnalyticsScreen extends StatelessWidget {
               children: [
                 _Header(),
                 const SizedBox(height: 20),
+                _TypeToggle(
+                  selected: _selectedType,
+                  onChanged: (v) => setState(() => _selectedType = v),
+                ),
+                const SizedBox(height: 16),
                 _SpendingChart(
-                  expenseByCategory: provider.expenseByCategory,
+                  categoryMap: categoryMap,
+                  total: total,
                   currency: currency,
                 ),
                 const SizedBox(height: 20),
@@ -32,12 +50,14 @@ class AnalyticsScreen extends StatelessWidget {
                   expense: provider.totalExpense,
                   currency: currency,
                 ),
+                const SizedBox(height: 12),
+                _TransactionCountTile(count: provider.totalTransactionCount),
                 const SizedBox(height: 24),
                 _SectionLabel('Category Analysis'),
                 const SizedBox(height: 12),
                 _CategoryBreakdown(
-                  expenseByCategory: provider.expenseByCategory,
-                  totalExpense: provider.totalExpense,
+                  categoryMap: categoryMap,
+                  total: total,
                   currency: currency,
                 ),
               ],
@@ -49,25 +69,125 @@ class AnalyticsScreen extends StatelessWidget {
   }
 }
 
+class _TransactionCountTile extends StatelessWidget {
+  final int count;
+
+  const _TransactionCountTile({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      borderRadius: 16,
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.receipt_long_rounded, color: AppColors.primaryBlue, size: 18),
+          ),
+          const SizedBox(width: 12),
+          const Text('Total Transactions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+          const Spacer(),
+          Text(
+            Formatters.compactAmount(count.toDouble()),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TypeToggle extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _TypeToggle({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged('Expense'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected == 'Expense' ? AppColors.expense.withValues(alpha: 0.15) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.trending_up_rounded, size: 16, color: selected == 'Expense' ? AppColors.expense : AppColors.textSecondary),
+                    const SizedBox(width: 6),
+                    Text('Expense', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected == 'Expense' ? AppColors.expense : AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged('Receive'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected == 'Receive' ? AppColors.income.withValues(alpha: 0.15) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.trending_down_rounded, size: 16, color: selected == 'Receive' ? AppColors.income : AppColors.textSecondary),
+                    const SizedBox(width: 6),
+                    Text('Receive', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected == 'Receive' ? AppColors.income : AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.canPop(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
-            ),
-            child: const Icon(Icons.chevron_left_rounded, color: AppColors.textPrimary, size: 24),
-          ),
-        ),
+        canPop
+            ? GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
+                  ),
+                  child: const Icon(Icons.chevron_left_rounded, color: AppColors.textPrimary, size: 24),
+                ),
+              )
+            : const SizedBox(width: 44),
         const Text(
           'Activity',
           style: TextStyle(
@@ -96,16 +216,14 @@ class _Header extends StatelessWidget {
 }
 
 class _SpendingChart extends StatelessWidget {
-  final Map<String, double> expenseByCategory;
+  final Map<String, double> categoryMap;
+  final double total;
   final String currency;
 
-  const _SpendingChart({required this.expenseByCategory, required this.currency});
+  const _SpendingChart({required this.categoryMap, required this.total, required this.currency});
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
-    final total = expenseByCategory.values.fold(0.0, (a, b) => a + b);
-
     return GlassCard(
       padding: const EdgeInsets.all(24),
       borderRadius: 28,
@@ -131,7 +249,7 @@ class _SpendingChart extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Spending Overview',
+                'Overview',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
@@ -145,7 +263,7 @@ class _SpendingChart extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${fmt.format(total)} $currency',
+                  '${Formatters.compactAmount(total)} $currency',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -158,7 +276,7 @@ class _SpendingChart extends StatelessWidget {
           const SizedBox(height: 24),
           SizedBox(
             height: 180,
-            child: expenseByCategory.isEmpty
+            child: categoryMap.isEmpty
                 ? Center(
                     child: Text(
                       'No data this month',
@@ -169,7 +287,7 @@ class _SpendingChart extends StatelessWidget {
                     ),
                   )
                 : _BarChartWidget(
-                    expenseByCategory: expenseByCategory,
+                    categoryMap: categoryMap,
                     total: total,
                   ),
           ),
@@ -180,18 +298,18 @@ class _SpendingChart extends StatelessWidget {
 }
 
 class _BarChartWidget extends StatelessWidget {
-  final Map<String, double> expenseByCategory;
+  final Map<String, double> categoryMap;
   final double total;
 
   const _BarChartWidget({
-    required this.expenseByCategory,
+    required this.categoryMap,
     required this.total,
   });
 
   @override
   Widget build(BuildContext context) {
-    final entries = expenseByCategory.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final bucketed = _bucketCategories(categoryMap, total);
+    final entries = bucketed.entries.toList();
 
     final maxValue = entries.isNotEmpty ? entries.first.value : 1.0;
 
@@ -214,7 +332,7 @@ class _BarChartWidget extends StatelessWidget {
               final category = entries[group.x.toInt()].key;
               final amount = entries[group.x.toInt()].value;
               return BarTooltipItem(
-                '$category\n\$${amount.toStringAsFixed(0)}',
+                '$category\n${Formatters.compactAmount(amount)}',
                 TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -302,8 +420,6 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
-
     return Row(
       children: [
         Expanded(
@@ -334,7 +450,7 @@ class _StatsRow extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${fmt.format(income)} $currency',
+                        '${Formatters.compactAmount(income)} $currency',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -378,7 +494,7 @@ class _StatsRow extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${fmt.format(expense)} $currency',
+                        '${Formatters.compactAmount(expense)} $currency',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -416,36 +532,52 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
+Map<String, double> _bucketCategories(Map<String, double> categoryMap, double total) {
+  final sorted = categoryMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  final major = <MapEntry<String, double>>[];
+  double othersSum = 0;
+  for (final e in sorted) {
+    final pct = total > 0 ? e.value / total * 100 : 0;
+    if (pct < 1) {
+      othersSum += e.value;
+    } else {
+      major.add(e);
+    }
+  }
+  if (othersSum > 0) {
+    major.add(MapEntry('Everything else', othersSum));
+  }
+  return {for (final e in major) e.key: e.value};
+}
+
 class _CategoryBreakdown extends StatelessWidget {
-  final Map<String, double> expenseByCategory;
-  final double totalExpense;
+  final Map<String, double> categoryMap;
+  final double total;
   final String currency;
 
   const _CategoryBreakdown({
-    required this.expenseByCategory,
-    required this.totalExpense,
+    required this.categoryMap,
+    required this.total,
     required this.currency,
   });
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
-
-    if (expenseByCategory.isEmpty) {
+    if (categoryMap.isEmpty) {
       return GlassCard(
         padding: const EdgeInsets.all(40),
         borderRadius: 20,
         child: Center(
           child: Text(
-            'No expenses to analyze',
+            'No data to analyze',
             style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.7)),
           ),
         ),
       );
     }
 
-    final entries = expenseByCategory.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final bucketed = _bucketCategories(categoryMap, total);
+    final entries = bucketed.entries.toList();
 
     final chartColors = [
       AppColors.primaryBlue,
@@ -468,9 +600,10 @@ class _CategoryBreakdown extends StatelessWidget {
                 sections: entries.asMap().entries.map((entry) {
                   final idx = entry.key;
                   final data = entry.value;
-                  final percentage = totalExpense > 0 ? (data.value / totalExpense * 100) : 0.0;
+                  final percentage = total > 0 ? (data.value / total * 100) : 0.0;
+                  final isOthers = data.key == 'Everything else';
                   return PieChartSectionData(
-                    color: chartColors[idx % chartColors.length],
+                    color: isOthers ? AppColors.textTertiary : chartColors[idx % chartColors.length],
                     value: data.value,
                     title: '${percentage.toStringAsFixed(0)}%',
                     titleStyle: const TextStyle(
@@ -490,7 +623,8 @@ class _CategoryBreakdown extends StatelessWidget {
           ...entries.asMap().entries.map((entry) {
             final idx = entry.key;
             final data = entry.value;
-            final percentage = totalExpense > 0 ? (data.value / totalExpense * 100) : 0.0;
+            final percentage = total > 0 ? (data.value / total * 100) : 0.0;
+            final isOthers = data.key == 'Everything else';
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 14),
@@ -505,23 +639,24 @@ class _CategoryBreakdown extends StatelessWidget {
                             width: 10,
                             height: 10,
                             decoration: BoxDecoration(
-                              color: chartColors[idx % chartColors.length],
+                              color: isOthers ? AppColors.textTertiary : chartColors[idx % chartColors.length],
                               borderRadius: BorderRadius.circular(3),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Text(
                             data.key,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: AppColors.textPrimary,
+                              fontStyle: isOthers ? FontStyle.italic : FontStyle.normal,
                             ),
                           ),
                         ],
                       ),
                       Text(
-                        '${fmt.format(data.value)} $currency',
+                        '${Formatters.compactAmount(data.value)} $currency',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -535,9 +670,9 @@ class _CategoryBreakdown extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: percentage / 100,
-                      backgroundColor: chartColors[idx % chartColors.length].withValues(alpha: 0.12),
+                      backgroundColor: (isOthers ? AppColors.textTertiary : chartColors[idx % chartColors.length]).withValues(alpha: 0.12),
                       valueColor: AlwaysStoppedAnimation(
-                        chartColors[idx % chartColors.length],
+                        isOthers ? AppColors.textTertiary : chartColors[idx % chartColors.length],
                       ),
                       minHeight: 6,
                     ),
