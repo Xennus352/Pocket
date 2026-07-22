@@ -20,6 +20,7 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
 
   void _addWallet() {
     final nameController = TextEditingController();
+    final amountController = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -31,18 +32,37 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
           borderRadius: BorderRadius.circular(16),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Wallet name',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Wallet name',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.6),
+                  ),
                 ),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.6),
-              ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amountController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: 'Initial amount (optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -55,10 +75,10 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
             onPressed: () {
               if (nameController.text.trim().isNotEmpty) {
                 final userProvider = context.read<UserProvider>();
-                if (userProvider.profile.wallets.length >= 8) {
+                if (userProvider.profile.wallets.length >= 10) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Maximum 8 wallets allowed'),
+                      content: Text('Only 10 wallet can create'),
                       backgroundColor: AppColors.warning,
                       behavior: SnackBarBehavior.floating,
                     ),
@@ -66,8 +86,9 @@ class _ManageWalletsScreenState extends State<ManageWalletsScreen> {
                   Navigator.pop(ctx);
                   return;
                 }
+                final amount = double.tryParse(amountController.text.trim()) ?? 0;
                 final wallets = List<Wallet>.from(userProvider.profile.wallets)
-                  ..add(Wallet(name: nameController.text.trim()));
+                  ..add(Wallet(name: nameController.text.trim(), balance: amount));
                 userProvider.updateWallets(wallets);
               }
               Navigator.pop(ctx);

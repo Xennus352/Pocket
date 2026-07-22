@@ -8,6 +8,7 @@ import 'providers/user_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/analytics_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'services/update_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -77,6 +78,10 @@ class _AppEntryState extends State<AppEntry> {
       if (!userProvider.onboardingComplete) {
         return const OnboardingScreen();
       }
+      // Check for updates after first build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        UpdateService.checkForUpdates(context);
+      });
       return const MainShell();
     }
     return _SplashScreen(onFinished: () {

@@ -659,7 +659,7 @@ class _MonthlyOverview extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Monthly Overview',
+                'This Month',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
@@ -733,7 +733,7 @@ class _MonthlyOverview extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Monthly Savings',
+                    'Today Saving',
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary.withValues(alpha: 0.8),

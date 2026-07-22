@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../config/colors.dart';
 import '../providers/user_provider.dart';
@@ -16,11 +17,20 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _nameController;
+  String _appVersion = '2.0.0';
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    setState(() {
+      _appVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
+    });
   }
 
   @override
@@ -59,9 +69,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 28),
             _SectionTitle(title: 'About'),
             const SizedBox(height: 12),
-            _buildInfoTile('Version', '1.0.0'),
+            _buildInfoTile('Version', _appVersion),
             const SizedBox(height: 12),
             _buildInfoTile('Database', 'SQLite'),
+            const SizedBox(height: 12),
+            _buildInfoTile('Developed By', 'SMK'),
           ],
         ),
       ),

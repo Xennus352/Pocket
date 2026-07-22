@@ -167,6 +167,9 @@ class _GlassWalletCardState extends State<GlassWalletCard> {
 
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
     final totalBalance = wallets.fold<double>(0, (s, w) => s + w.balance);
+    
+    final maxVisible = widget.sources.length.clamp(0, 10);
+    final totalTopOffset = (maxVisible - 1) * 16.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -232,14 +235,17 @@ class _GlassWalletCardState extends State<GlassWalletCard> {
             ],
           ),
         ),
-        const SizedBox(height: 4),
-        // Card stack - fanned layout
+
+        const SizedBox(height: 1),
+
+        // Card stack layer
         SizedBox(
-          height: MediaQuery.of(context).size.height * 0.32,
+          height: (MediaQuery.of(context).size.width - 32) * (54 / 85) + totalTopOffset,
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
               for (int i = 0; i < _stack.length; i++)
-                _buildStackedCard(i),
+                _buildStackedCard(i, totalTopOffset),
             ],
           ),
         ),
@@ -332,23 +338,23 @@ class _GlassWalletCardState extends State<GlassWalletCard> {
     );
   }
 
-  Widget _buildStackedCard(int index) {
+  Widget _buildStackedCard(int index, double topMarginOffset) {
     final entry = _stack[index];
     final isFront = index == _stack.length - 1;
     final stackDepth = _stack.length - 1 - index;
-    final maxVisible = widget.sources.length.clamp(0, 5);
+    final maxVisible = widget.sources.length.clamp(0, 10);
 
     if (stackDepth >= maxVisible) return const SizedBox.shrink();
 
-    final verticalShift = -stackDepth * 18.0;
-    final horizontalShift = stackDepth * 8.0;
+    final topShift = topMarginOffset - (stackDepth * 14.0);
+    final horizontalShift = stackDepth * 6.0;
     final cardScale = 1.0 - stackDepth * 0.02;
     final cardRotate = stackDepth * -1.2;
 
     return Positioned(
       left: 0,
       right: 0,
-      bottom: 0,
+      top: topShift,
       child: GestureDetector(
         onTap: isFront
             ? null
@@ -359,7 +365,7 @@ class _GlassWalletCardState extends State<GlassWalletCard> {
           wallet: entry.wallet,
           currency: entry.currency,
           isFront: isFront,
-          verticalOffset: verticalShift,
+          verticalOffset: 0,
           horizontalOffset: horizontalShift,
           scale: cardScale,
           rotation: cardRotate,
@@ -462,14 +468,14 @@ class _CardStackLayerState extends State<_CardStackLayer>
       onVerticalDragUpdate: widget.isFront
           ? (details) {
               setState(() {
-                _dragOffset = (details.delta.dy * 0.7).clamp(-180, 0) + _dragOffset;
-                _dragRotate = (_dragOffset / -180 * 8).clamp(0, 8);
+                _dragOffset = (details.delta.dy * 0.7).clamp(0, 180) + _dragOffset;
+                _dragRotate = (_dragOffset / 180 * 8).clamp(0, 8);
               });
             }
           : null,
       onVerticalDragEnd: widget.isFront
           ? (details) {
-              if (_dragOffset < -70 && widget.onSwipeUp != null) {
+              if (_dragOffset > 70 && widget.onSwipeUp != null) {
                 widget.onSwipeUp!();
               }
               setState(() {
@@ -525,7 +531,6 @@ class _CardStackLayerState extends State<_CardStackLayer>
                 borderRadius: BorderRadius.circular(24),
                 child: Stack(
                   children: [
-                    // Wallet-specific gradient
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -536,7 +541,6 @@ class _CardStackLayerState extends State<_CardStackLayer>
                         ),
                       ),
                     ),
-                    // Decorative circles
                     Positioned(
                       right: -20,
                       top: -20,
@@ -561,7 +565,6 @@ class _CardStackLayerState extends State<_CardStackLayer>
                         ),
                       ),
                     ),
-                    // Border
                     Positioned.fill(
                       child: Container(
                         decoration: BoxDecoration(
@@ -573,14 +576,12 @@ class _CardStackLayerState extends State<_CardStackLayer>
                         ),
                       ),
                     ),
-                    // Main content
                     Positioned.fill(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Wallet name bar - always visible at top
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
@@ -815,5 +816,3 @@ class _CardGlowState extends State<_CardGlow>
     );
   }
 }
-
-
