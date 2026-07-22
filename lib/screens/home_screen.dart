@@ -674,7 +674,7 @@ class _MonthlyOverview extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  'This Month',
+                  'Today',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,

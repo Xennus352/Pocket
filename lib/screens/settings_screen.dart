@@ -17,7 +17,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _nameController;
-  String _appVersion = '2.0.0';
+  String _appVersion = '2.0.1';
 
   @override
   void initState() {
