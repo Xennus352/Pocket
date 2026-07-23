@@ -76,3 +76,4 @@ app.*.map.json
 .svn/
 migrate_working_dir/
 .flutter-plugins-dependencies
+credit-card-stack/
