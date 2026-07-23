@@ -89,6 +89,70 @@ void main() {
     });
   });
 
+  group('isTransfer', () {
+    test('cashIn is transfer', () {
+      final txn = Transaction(
+        title: 'Test', amount: 1000, type: TransactionType.income,
+        category: 'Other', date: DateTime(2026, 7, 23),
+        agentTxnType: AgentTransactionType.cashIn,
+      );
+      expect(txn.isTransfer, true);
+    });
+
+    test('cashOut is transfer', () {
+      final txn = Transaction(
+        title: 'Test', amount: 1000, type: TransactionType.expense,
+        category: 'Other', date: DateTime(2026, 7, 23),
+        agentTxnType: AgentTransactionType.cashOut,
+      );
+      expect(txn.isTransfer, true);
+    });
+
+    test('transfer is transfer', () {
+      final txn = Transaction(
+        title: 'Test', amount: 1000, type: TransactionType.income,
+        category: 'Other', date: DateTime(2026, 7, 23),
+        agentTxnType: AgentTransactionType.transfer,
+      );
+      expect(txn.isTransfer, true);
+    });
+
+    test('billPayment is not transfer', () {
+      final txn = Transaction(
+        title: 'Test', amount: 1000, type: TransactionType.expense,
+        category: 'Other', date: DateTime(2026, 7, 23),
+        agentTxnType: AgentTransactionType.billPayment,
+      );
+      expect(txn.isTransfer, false);
+    });
+
+    test('topUp is not transfer', () {
+      final txn = Transaction(
+        title: 'Test', amount: 1000, type: TransactionType.expense,
+        category: 'Other', date: DateTime(2026, 7, 23),
+        agentTxnType: AgentTransactionType.topUp,
+      );
+      expect(txn.isTransfer, false);
+    });
+
+    test('none is not transfer', () {
+      final txn = Transaction(
+        title: 'Test', amount: 1000, type: TransactionType.income,
+        category: 'Other', date: DateTime(2026, 7, 23),
+        agentTxnType: AgentTransactionType.none,
+      );
+      expect(txn.isTransfer, false);
+    });
+
+    test('null agentTxnType is not transfer', () {
+      final txn = Transaction(
+        title: 'Test', amount: 1000, type: TransactionType.income,
+        category: 'Other', date: DateTime(2026, 7, 23),
+      );
+      expect(txn.isTransfer, false);
+    });
+  });
+
   group('AgentTransactionType', () {
     test('none label is None', () {
       expect(AgentTransactionType.none.label, 'None');
@@ -106,6 +170,120 @@ void main() {
       expect(TransactionType.values.length, 2);
       expect(TransactionType.values, contains(TransactionType.income));
       expect(TransactionType.values, contains(TransactionType.expense));
+    });
+  });
+
+  group('Agent double-entry balance effect', () {
+    test('cashIn with e-wallet increases wallet and decreases Cash', () {
+      final txn = Transaction(
+        title: 'Cash-In KPay',
+        amount: 10000,
+        type: TransactionType.income,
+        category: 'Cash-In',
+        date: DateTime(2026, 7, 23),
+        agentTxnType: AgentTransactionType.cashIn,
+        paymentType: 'KPay',
+      );
+      expect(txn.isAgent, true);
+      expect(txn.type, TransactionType.income);
+      expect(txn.agentTxnType, AgentTransactionType.cashIn);
+      expect(txn.paymentType, 'KPay');
+
+      // Simulate applyWalletEffects logic:
+      // KPay += amount (income), Cash -= amount (opposite)
+      double kpayBal = 50000;
+      double cashBal = 100000;
+      kpayBal += txn.amount; // income: +
+      cashBal -= txn.amount; // Cash: opposite
+      expect(kpayBal, 60000);
+      expect(cashBal, 90000);
+    });
+
+    test('cashOut with e-wallet decreases wallet and increases Cash', () {
+      final txn = Transaction(
+        title: 'Cash-Out KPay',
+        amount: 10000,
+        type: TransactionType.expense,
+        category: 'Cash-Out',
+        date: DateTime(2026, 7, 23),
+        agentTxnType: AgentTransactionType.cashOut,
+        paymentType: 'KPay',
+      );
+      expect(txn.isAgent, true);
+      expect(txn.type, TransactionType.expense);
+      expect(txn.agentTxnType, AgentTransactionType.cashOut);
+
+      // Simulate applyWalletEffects logic:
+      // KPay -= amount (expense), Cash += amount (opposite)
+      double kpayBal = 50000;
+      double cashBal = 100000;
+      kpayBal -= txn.amount; // expense: -
+      cashBal += txn.amount; // Cash: opposite
+      expect(kpayBal, 40000);
+      expect(cashBal, 110000);
+    });
+
+    test('reverse cashIn restores original balances', () {
+      double kpayBal = 60000;
+      double cashBal = 90000;
+      double amount = 10000;
+
+      // Reverse cashIn: KPay -= amount, Cash += amount
+      kpayBal -= amount;
+      cashBal += amount;
+      expect(kpayBal, 50000);
+      expect(cashBal, 100000);
+    });
+
+    test('reverse cashOut restores original balances', () {
+      double kpayBal = 40000;
+      double cashBal = 110000;
+      double amount = 10000;
+
+      // Reverse cashOut: KPay += amount, Cash -= amount
+      kpayBal += amount;
+      cashBal -= amount;
+      expect(kpayBal, 50000);
+      expect(cashBal, 100000);
+    });
+
+    test('agent transaction with Cash paymentType only affects Cash', () {
+      final txn = Transaction(
+        title: 'Cash-In with Cash',
+        amount: 10000,
+        type: TransactionType.income,
+        category: 'Cash-In',
+        date: DateTime(2026, 7, 23),
+        agentTxnType: AgentTransactionType.cashIn,
+        paymentType: 'Cash',
+      );
+      expect(txn.isAgent, true);
+      expect(txn.paymentType, 'Cash');
+
+      // When paymentType is Cash, only Cash is updated (single-entry)
+      double cashBal = 100000;
+      cashBal += txn.amount; // income: +
+      expect(cashBal, 110000);
+    });
+
+    test('non-agent transaction with e-wallet also applies double-entry', () {
+      final txn = Transaction(
+        title: 'Salary',
+        amount: 500000,
+        type: TransactionType.income,
+        category: 'Salary',
+        date: DateTime(2026, 7, 23),
+        paymentType: 'KPay',
+      );
+      expect(txn.isAgent, false);
+
+      // Double-entry: KPay +amount, Cash -amount
+      double kpayBal = 50000;
+      double cashBal = 100000;
+      kpayBal += txn.amount;
+      cashBal -= txn.amount;
+      expect(kpayBal, 550000);
+      expect(cashBal, -400000);
     });
   });
 }

@@ -1055,6 +1055,20 @@ class _TransactionTimelineTileState extends State<_TransactionTimelineTile>
                                       ],
                                     ],
                                   ),
+                                  if (widget.txn.paymentType != null && widget.txn.paymentType != 'Cash')
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        'Cash ${widget.txn.type == TransactionType.income ? '-' : '+'}${fmt.format(widget.txn.amount)}',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: widget.txn.type == TransactionType.income
+                                              ? AppColors.expense
+                                              : AppColors.income,
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),

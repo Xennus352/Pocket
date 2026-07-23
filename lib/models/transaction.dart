@@ -30,6 +30,9 @@ class Transaction {
   });
 
   bool get isAgent => agentTxnType != null && agentTxnType != AgentTransactionType.none;
+  bool get isTransfer => agentTxnType == AgentTransactionType.cashIn ||
+      agentTxnType == AgentTransactionType.cashOut ||
+      agentTxnType == AgentTransactionType.transfer;
 
   Map<String, dynamic> toMap() => {
         'title': title,

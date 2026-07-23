@@ -24,22 +24,27 @@ class AnalyticsScreen extends StatelessWidget {
           t.date.month == now.month &&
           t.date.day == now.day
         ).toList();
-        final dailyIncome = todayTxns
-            .where((t) => t.type == TransactionType.income)
+        final trueIncome = todayTxns
+            .where((t) => t.type == TransactionType.income && !t.isTransfer)
             .fold<double>(0, (s, t) => s + t.amount);
-        final dailyExpense = todayTxns
-            .where((t) => t.type == TransactionType.expense)
+        final trueExpense = todayTxns
+            .where((t) => t.type == TransactionType.expense && !t.isTransfer)
             .fold<double>(0, (s, t) => s + t.amount);
-        final dailyNet = dailyIncome - dailyExpense;
-        final totalFlow = dailyIncome + dailyExpense;
-        final incomeRatio = totalFlow > 0 ? dailyIncome / totalFlow : 0.5;
+        final dailyNet = trueIncome - trueExpense;
+        final totalFlow = trueIncome + trueExpense;
+        final incomeRatio = totalFlow > 0 ? trueIncome / totalFlow : 0.5;
+
+        final walletDeltas = _computeWalletDeltas(
+          wallets: userProvider.profile.wallets,
+          transactions: todayTxns,
+        );
 
         return Scaffold(
           body: SafeArea(
             child: Responsive(child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
               children: [
-                _Header(now: now, net: dailyNet, income: dailyIncome, expense: dailyExpense, currency: currency),
+                _Header(now: now, net: dailyNet, income: trueIncome, expense: trueExpense, currency: currency, walletDeltas: walletDeltas),
                 const SizedBox(height: 20),
                 _FlowBar(incomeRatio: incomeRatio, fmt: NumberFormat.currency(symbol: '', decimalDigits: 0), currency: currency),
                 const SizedBox(height: 20),
@@ -55,14 +60,48 @@ class AnalyticsScreen extends StatelessWidget {
   }
 }
 
+Map<String, double> _computeWalletDeltas({
+  required List<Wallet> wallets,
+  required List<Transaction> transactions,
+}) {
+  final deltas = <String, double>{};
+  for (final w in wallets) {
+    double delta = 0;
+    if (w.name == 'Cash') {
+      delta += transactions
+          .where((t) => t.paymentType == 'Cash' && t.type == TransactionType.income)
+          .fold<double>(0, (s, t) => s + t.amount);
+      delta -= transactions
+          .where((t) => t.paymentType == 'Cash' && t.type == TransactionType.expense)
+          .fold<double>(0, (s, t) => s + t.amount);
+      delta -= transactions
+          .where((t) => t.paymentType != null && t.paymentType != 'Cash' && t.type == TransactionType.income)
+          .fold<double>(0, (s, t) => s + t.amount);
+      delta += transactions
+          .where((t) => t.paymentType != null && t.paymentType != 'Cash' && t.type == TransactionType.expense)
+          .fold<double>(0, (s, t) => s + t.amount);
+    } else {
+      delta += transactions
+          .where((t) => t.paymentType == w.name && t.type == TransactionType.income)
+          .fold<double>(0, (s, t) => s + t.amount);
+      delta -= transactions
+          .where((t) => t.paymentType == w.name && t.type == TransactionType.expense)
+          .fold<double>(0, (s, t) => s + t.amount);
+    }
+    deltas[w.name] = delta;
+  }
+  return deltas;
+}
+
 class _Header extends StatelessWidget {
   final DateTime now;
   final double net;
   final double income;
   final double expense;
   final String currency;
+  final Map<String, double> walletDeltas;
 
-  const _Header({required this.now, required this.net, required this.income, required this.expense, required this.currency});
+  const _Header({required this.now, required this.net, required this.income, required this.expense, required this.currency, required this.walletDeltas});
 
   @override
   Widget build(BuildContext context) {
@@ -139,6 +178,31 @@ class _Header extends StatelessWidget {
               _miniChip(Icons.arrow_upward_rounded, fmt.format(expense), AppColors.expense),
             ],
           ),
+          if (walletDeltas.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: walletDeltas.entries.map((e) {
+                final color = e.value >= 0 ? AppColors.income : AppColors.expense;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${e.key}: ${e.value >= 0 ? '+' : ''}${fmt.format(e.value)}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: color,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ],
       ),
     );
@@ -182,7 +246,7 @@ class _FlowBar extends StatelessWidget {
             children: [
               Icon(Icons.swap_horiz_rounded, size: 16, color: AppColors.textSecondary.withValues(alpha: 0.8)),
               const SizedBox(width: 6),
-              Text('Cash Flow Split', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary.withValues(alpha: 0.8))),
+              Text('Income vs Expense', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary.withValues(alpha: 0.8))),
             ],
           ),
           const SizedBox(height: 12),
@@ -224,8 +288,8 @@ class _FlowBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _flowLegend(Icons.arrow_downward_rounded, 'Cash In', '${(incomeRatio * 100).round()}%', AppColors.income),
-              _flowLegend(Icons.arrow_upward_rounded, 'Cash Out', '${((1 - incomeRatio) * 100).round()}%', AppColors.expense),
+              _flowLegend(Icons.arrow_downward_rounded, 'Income', '${(incomeRatio * 100).round()}%', AppColors.income),
+              _flowLegend(Icons.arrow_upward_rounded, 'Expense', '${((1 - incomeRatio) * 100).round()}%', AppColors.expense),
             ],
           ),
         ],
@@ -277,12 +341,28 @@ class _WalletGrid extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         ...wallets.map((w) {
-          final cashIn = transactions
-              .where((t) => t.paymentType == w.name && t.type == TransactionType.income)
-              .fold<double>(0, (s, t) => s + t.amount);
-          final cashOut = transactions
-              .where((t) => t.paymentType == w.name && t.type == TransactionType.expense)
-              .fold<double>(0, (s, t) => s + t.amount);
+          double cashIn, cashOut;
+          if (w.name == 'Cash') {
+            cashIn = transactions
+                .where((t) => t.paymentType == 'Cash' && t.type == TransactionType.income)
+                .fold<double>(0, (s, t) => s + t.amount);
+            cashIn += transactions
+                .where((t) => t.paymentType != null && t.paymentType != 'Cash' && t.type == TransactionType.expense)
+                .fold<double>(0, (s, t) => s + t.amount);
+            cashOut = transactions
+                .where((t) => t.paymentType == 'Cash' && t.type == TransactionType.expense)
+                .fold<double>(0, (s, t) => s + t.amount);
+            cashOut += transactions
+                .where((t) => t.paymentType != null && t.paymentType != 'Cash' && t.type == TransactionType.income)
+                .fold<double>(0, (s, t) => s + t.amount);
+          } else {
+            cashIn = transactions
+                .where((t) => t.paymentType == w.name && t.type == TransactionType.income)
+                .fold<double>(0, (s, t) => s + t.amount);
+            cashOut = transactions
+                .where((t) => t.paymentType == w.name && t.type == TransactionType.expense)
+                .fold<double>(0, (s, t) => s + t.amount);
+          }
           final color = WalletHelper.colorFor(w.name);
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -386,6 +466,14 @@ class _TodayTxnsList extends StatelessWidget {
           ...transactions.reversed.take(10).map((txn) {
             final isIncome = txn.type == TransactionType.income;
             final color = isIncome ? AppColors.income : AppColors.expense;
+            final displayTitle = txn.isTransfer
+                ? (isIncome
+                    ? 'Transfer: Cash → ${txn.paymentType ?? ""}'
+                    : 'Transfer: ${txn.paymentType ?? ""} → Cash')
+                : txn.title;
+            final icon = txn.isTransfer ? Icons.swap_horiz_rounded
+                : (isIncome ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded);
+            final showCashEffect = txn.paymentType != null && txn.paymentType != 'Cash';
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: GlassCard(
@@ -399,18 +487,26 @@ class _TodayTxnsList extends StatelessWidget {
                         color: color.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(isIncome ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                        size: 18, color: color),
+                      child: Icon(icon, size: 18, color: color),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(txn.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+                          Text(displayTitle, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                           if (txn.paymentType != null)
                             Text(txn.paymentType!, style: TextStyle(fontSize: 11, color: AppColors.textSecondary.withValues(alpha: 0.7))),
+                          if (showCashEffect)
+                            Text(
+                              'Cash ${isIncome ? '-' : '+'}${fmt.format(txn.amount)}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: isIncome ? AppColors.expense : AppColors.income,
+                              ),
+                            ),
                         ],
                       ),
                     ),

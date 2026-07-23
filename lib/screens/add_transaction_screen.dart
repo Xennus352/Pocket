@@ -257,6 +257,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final txnProvider = context.read<TransactionProvider>();
     final userProvider = context.read<UserProvider>();
 
+    String? balanceWarning;
     if (txnType == TransactionType.expense) {
       final wallet = userProvider.profile.wallets.where((w) => w.name == _wallet).firstOrNull;
       final walletBalance = wallet?.balance ?? 0;
@@ -267,20 +268,31 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         walletBalance: walletBalance,
       );
       if (impact.hasNoBalance || impact.willBeInsufficient || impact.isBigChange) {
-        setState(() => _submitting = false);
-        String message;
         if (impact.hasNoBalance) {
-          message = '$_wallet balance is 0 or negative (${impact.currentBalance.toStringAsFixed(0)}).';
+          balanceWarning = '$_wallet balance is 0 or negative (${impact.currentBalance.toStringAsFixed(0)}).';
         } else if (impact.willBeInsufficient) {
-          message = 'This expense (${amount.toStringAsFixed(0)}) will leave $_wallet balance negative (${impact.newBalance.toStringAsFixed(0)}).';
+          balanceWarning = 'This expense (${amount.toStringAsFixed(0)}) will leave $_wallet balance negative (${impact.newBalance.toStringAsFixed(0)}).';
         } else {
-          message = 'This expense (${amount.toStringAsFixed(0)}) is at least ${userProvider.profile.warningThresholdPercent.toStringAsFixed(0)}% of $_wallet balance (${impact.currentBalance.toStringAsFixed(0)}).';
+          balanceWarning = 'This expense (${amount.toStringAsFixed(0)}) is at least ${userProvider.profile.warningThresholdPercent.toStringAsFixed(0)}% of $_wallet balance (${impact.currentBalance.toStringAsFixed(0)}).';
         }
-        final proceed = await _showBalanceWarning(context, message);
-        if (!mounted) return;
-        if (!proceed) return;
-        setState(() => _submitting = true);
       }
+    } else if (txnType == TransactionType.income && _wallet != 'Cash') {
+      final cashWallet = userProvider.profile.wallets.where((w) => w.name == 'Cash').firstOrNull;
+      final cashBal = cashWallet?.balance ?? 0;
+      final newCashBal = cashBal - amount;
+      if (cashBal <= 0 || newCashBal < 0) {
+        balanceWarning = 'Cash balance (${cashBal.toStringAsFixed(0)}) will become ${newCashBal < 0 ? 'negative' : '0 or negative'} (${newCashBal.toStringAsFixed(0)}).';
+      } else if (amount >= cashBal * userProvider.profile.warningThresholdPercent / 100) {
+        balanceWarning = 'This Cash-In (${amount.toStringAsFixed(0)}) reduces Cash by at least ${userProvider.profile.warningThresholdPercent.toStringAsFixed(0)}% of current Cash balance (${cashBal.toStringAsFixed(0)}).';
+      }
+    }
+
+    if (balanceWarning != null) {
+      setState(() => _submitting = false);
+      final proceed = await _showBalanceWarning(context, balanceWarning);
+      if (!mounted) return;
+      if (!proceed) return;
+      setState(() => _submitting = true);
     }
 
     final txn = Transaction(
