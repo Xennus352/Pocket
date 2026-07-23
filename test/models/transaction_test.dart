@@ -173,117 +173,49 @@ void main() {
     });
   });
 
-  group('Agent double-entry balance effect', () {
-    test('cashIn with e-wallet increases wallet and decreases Cash', () {
+  group('Wallet balance effect', () {
+    test('income with e-wallet increases only that wallet', () {
       final txn = Transaction(
         title: 'Cash-In KPay',
         amount: 10000,
         type: TransactionType.income,
         category: 'Cash-In',
         date: DateTime(2026, 7, 23),
-        agentTxnType: AgentTransactionType.cashIn,
         paymentType: 'KPay',
       );
-      expect(txn.isAgent, true);
-      expect(txn.type, TransactionType.income);
-      expect(txn.agentTxnType, AgentTransactionType.cashIn);
-      expect(txn.paymentType, 'KPay');
-
-      // Simulate applyWalletEffects logic:
-      // KPay += amount (income), Cash -= amount (opposite)
       double kpayBal = 50000;
       double cashBal = 100000;
-      kpayBal += txn.amount; // income: +
-      cashBal -= txn.amount; // Cash: opposite
+      kpayBal += txn.amount;
       expect(kpayBal, 60000);
-      expect(cashBal, 90000);
+      expect(cashBal, 100000);
     });
 
-    test('cashOut with e-wallet decreases wallet and increases Cash', () {
+    test('expense with e-wallet decreases only that wallet', () {
       final txn = Transaction(
         title: 'Cash-Out KPay',
         amount: 10000,
         type: TransactionType.expense,
         category: 'Cash-Out',
         date: DateTime(2026, 7, 23),
-        agentTxnType: AgentTransactionType.cashOut,
         paymentType: 'KPay',
       );
-      expect(txn.isAgent, true);
-      expect(txn.type, TransactionType.expense);
-      expect(txn.agentTxnType, AgentTransactionType.cashOut);
-
-      // Simulate applyWalletEffects logic:
-      // KPay -= amount (expense), Cash += amount (opposite)
       double kpayBal = 50000;
       double cashBal = 100000;
-      kpayBal -= txn.amount; // expense: -
-      cashBal += txn.amount; // Cash: opposite
+      kpayBal -= txn.amount;
       expect(kpayBal, 40000);
-      expect(cashBal, 110000);
-    });
-
-    test('reverse cashIn restores original balances', () {
-      double kpayBal = 60000;
-      double cashBal = 90000;
-      double amount = 10000;
-
-      // Reverse cashIn: KPay -= amount, Cash += amount
-      kpayBal -= amount;
-      cashBal += amount;
-      expect(kpayBal, 50000);
       expect(cashBal, 100000);
     });
 
-    test('reverse cashOut restores original balances', () {
-      double kpayBal = 40000;
-      double cashBal = 110000;
-      double amount = 10000;
-
-      // Reverse cashOut: KPay += amount, Cash -= amount
-      kpayBal += amount;
-      cashBal -= amount;
-      expect(kpayBal, 50000);
-      expect(cashBal, 100000);
-    });
-
-    test('agent transaction with Cash paymentType only affects Cash', () {
-      final txn = Transaction(
-        title: 'Cash-In with Cash',
-        amount: 10000,
-        type: TransactionType.income,
-        category: 'Cash-In',
-        date: DateTime(2026, 7, 23),
-        agentTxnType: AgentTransactionType.cashIn,
-        paymentType: 'Cash',
-      );
-      expect(txn.isAgent, true);
-      expect(txn.paymentType, 'Cash');
-
-      // When paymentType is Cash, only Cash is updated (single-entry)
+    test('transaction with Cash paymentType only affects Cash', () {
       double cashBal = 100000;
-      cashBal += txn.amount; // income: +
+      cashBal += 10000;
       expect(cashBal, 110000);
     });
 
-    test('non-agent transaction with e-wallet also applies double-entry', () {
-      final txn = Transaction(
-        title: 'Salary',
-        amount: 500000,
-        type: TransactionType.income,
-        category: 'Salary',
-        date: DateTime(2026, 7, 23),
-        paymentType: 'KPay',
-      );
-      expect(txn.isAgent, false);
-
-      // Double-entry: KPay +amount, Cash -amount
-      double kpayBal = 50000;
+    test('income via Cash only affects Cash', () {
       double cashBal = 100000;
-      kpayBal += txn.amount;
-      cashBal -= txn.amount;
-      expect(kpayBal, 550000);
-      expect(cashBal, -400000);
+      cashBal += 500000;
+      expect(cashBal, 600000);
     });
   });
 }

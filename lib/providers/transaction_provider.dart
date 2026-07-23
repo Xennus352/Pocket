@@ -56,7 +56,7 @@ class TransactionProvider extends ChangeNotifier {
   int get currentMonth => _currentMonth;
   String get monthLabel => DateFormat('MMMM yyyy').format(DateTime(_currentYear, _currentMonth));
   double get monthlyExpense => _transactions
-      .where((t) => t.type == TransactionType.expense)
+      .where((t) => t.type == TransactionType.expense && !t.isTransfer)
       .fold<double>(0, (sum, t) => sum + t.amount);
 
   BalanceImpactResult checkBalanceImpact({
@@ -141,9 +141,11 @@ class TransactionProvider extends ChangeNotifier {
 
   Future<void> updateTransaction(Transaction txn) async {
     try {
-      final old = _transactions.firstWhere((t) => t.id == txn.id, orElse: () => txn);
+      final oldIdx = _transactions.indexWhere((t) => t.id == txn.id);
       if (_userProvider != null) {
-        await _reverseWalletEffects(old);
+        if (oldIdx >= 0) {
+          await _reverseWalletEffects(_transactions[oldIdx]);
+        }
         await _applyWalletEffects(txn);
       }
       await _db.updateTransaction(txn);
@@ -170,46 +172,20 @@ class TransactionProvider extends ChangeNotifier {
 
   Future<void> _applyWalletEffects(Transaction txn) async {
     if (_userProvider == null || txn.paymentType == null) return;
-    if (txn.paymentType != 'Cash') {
-      await _userProvider!.updateWalletBalance(
-        txn.paymentType!,
-        txn.amount,
-        isIncome: txn.type == TransactionType.income,
-      );
-      await _userProvider!.updateWalletBalance(
-        'Cash',
-        txn.amount,
-        isIncome: txn.type != TransactionType.income,
-      );
-    } else {
-      await _userProvider!.updateWalletBalance(
-        txn.paymentType!,
-        txn.amount,
-        isIncome: txn.type == TransactionType.income,
-      );
-    }
+    await _userProvider!.updateWalletBalance(
+      txn.paymentType!,
+      txn.amount,
+      isIncome: txn.type == TransactionType.income,
+    );
   }
 
   Future<void> _reverseWalletEffects(Transaction txn) async {
     if (_userProvider == null || txn.paymentType == null) return;
-    if (txn.paymentType != 'Cash') {
-      await _userProvider!.updateWalletBalance(
-        txn.paymentType!,
-        txn.amount,
-        isIncome: txn.type != TransactionType.income,
-      );
-      await _userProvider!.updateWalletBalance(
-        'Cash',
-        txn.amount,
-        isIncome: txn.type == TransactionType.income,
-      );
-    } else {
-      await _userProvider!.updateWalletBalance(
-        txn.paymentType!,
-        txn.amount,
-        isIncome: txn.type != TransactionType.income,
-      );
-    }
+    await _userProvider!.updateWalletBalance(
+      txn.paymentType!,
+      txn.amount,
+      isIncome: txn.type != TransactionType.income,
+    );
   }
 
 

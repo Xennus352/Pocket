@@ -276,15 +276,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           balanceWarning = 'This expense (${amount.toStringAsFixed(0)}) is at least ${userProvider.profile.warningThresholdPercent.toStringAsFixed(0)}% of $_wallet balance (${impact.currentBalance.toStringAsFixed(0)}).';
         }
       }
-    } else if (txnType == TransactionType.income && _wallet != 'Cash') {
-      final cashWallet = userProvider.profile.wallets.where((w) => w.name == 'Cash').firstOrNull;
-      final cashBal = cashWallet?.balance ?? 0;
-      final newCashBal = cashBal - amount;
-      if (cashBal <= 0 || newCashBal < 0) {
-        balanceWarning = 'Cash balance (${cashBal.toStringAsFixed(0)}) will become ${newCashBal < 0 ? 'negative' : '0 or negative'} (${newCashBal.toStringAsFixed(0)}).';
-      } else if (amount >= cashBal * userProvider.profile.warningThresholdPercent / 100) {
-        balanceWarning = 'This Cash-In (${amount.toStringAsFixed(0)}) reduces Cash by at least ${userProvider.profile.warningThresholdPercent.toStringAsFixed(0)}% of current Cash balance (${cashBal.toStringAsFixed(0)}).';
-      }
     }
 
     if (balanceWarning != null) {

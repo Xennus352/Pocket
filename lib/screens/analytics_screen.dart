@@ -67,27 +67,12 @@ Map<String, double> _computeWalletDeltas({
   final deltas = <String, double>{};
   for (final w in wallets) {
     double delta = 0;
-    if (w.name == 'Cash') {
-      delta += transactions
-          .where((t) => t.paymentType == 'Cash' && t.type == TransactionType.income)
-          .fold<double>(0, (s, t) => s + t.amount);
-      delta -= transactions
-          .where((t) => t.paymentType == 'Cash' && t.type == TransactionType.expense)
-          .fold<double>(0, (s, t) => s + t.amount);
-      delta -= transactions
-          .where((t) => t.paymentType != null && t.paymentType != 'Cash' && t.type == TransactionType.income)
-          .fold<double>(0, (s, t) => s + t.amount);
-      delta += transactions
-          .where((t) => t.paymentType != null && t.paymentType != 'Cash' && t.type == TransactionType.expense)
-          .fold<double>(0, (s, t) => s + t.amount);
-    } else {
-      delta += transactions
-          .where((t) => t.paymentType == w.name && t.type == TransactionType.income)
-          .fold<double>(0, (s, t) => s + t.amount);
-      delta -= transactions
-          .where((t) => t.paymentType == w.name && t.type == TransactionType.expense)
-          .fold<double>(0, (s, t) => s + t.amount);
-    }
+    delta += transactions
+        .where((t) => t.paymentType == w.name && t.type == TransactionType.income)
+        .fold<double>(0, (s, t) => s + t.amount);
+    delta -= transactions
+        .where((t) => t.paymentType == w.name && t.type == TransactionType.expense)
+        .fold<double>(0, (s, t) => s + t.amount);
     deltas[w.name] = delta;
   }
   return deltas;
@@ -341,28 +326,12 @@ class _WalletGrid extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         ...wallets.map((w) {
-          double cashIn, cashOut;
-          if (w.name == 'Cash') {
-            cashIn = transactions
-                .where((t) => t.paymentType == 'Cash' && t.type == TransactionType.income)
-                .fold<double>(0, (s, t) => s + t.amount);
-            cashIn += transactions
-                .where((t) => t.paymentType != null && t.paymentType != 'Cash' && t.type == TransactionType.expense)
-                .fold<double>(0, (s, t) => s + t.amount);
-            cashOut = transactions
-                .where((t) => t.paymentType == 'Cash' && t.type == TransactionType.expense)
-                .fold<double>(0, (s, t) => s + t.amount);
-            cashOut += transactions
-                .where((t) => t.paymentType != null && t.paymentType != 'Cash' && t.type == TransactionType.income)
-                .fold<double>(0, (s, t) => s + t.amount);
-          } else {
-            cashIn = transactions
-                .where((t) => t.paymentType == w.name && t.type == TransactionType.income)
-                .fold<double>(0, (s, t) => s + t.amount);
-            cashOut = transactions
-                .where((t) => t.paymentType == w.name && t.type == TransactionType.expense)
-                .fold<double>(0, (s, t) => s + t.amount);
-          }
+          final cashIn = transactions
+              .where((t) => t.paymentType == w.name && t.type == TransactionType.income)
+              .fold<double>(0, (s, t) => s + t.amount);
+          final cashOut = transactions
+              .where((t) => t.paymentType == w.name && t.type == TransactionType.expense)
+              .fold<double>(0, (s, t) => s + t.amount);
           final color = WalletHelper.colorFor(w.name);
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -466,14 +435,9 @@ class _TodayTxnsList extends StatelessWidget {
           ...transactions.reversed.take(10).map((txn) {
             final isIncome = txn.type == TransactionType.income;
             final color = isIncome ? AppColors.income : AppColors.expense;
-            final displayTitle = txn.isTransfer
-                ? (isIncome
-                    ? 'Transfer: Cash → ${txn.paymentType ?? ""}'
-                    : 'Transfer: ${txn.paymentType ?? ""} → Cash')
-                : txn.title;
+            final displayTitle = txn.title;
             final icon = txn.isTransfer ? Icons.swap_horiz_rounded
                 : (isIncome ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded);
-            final showCashEffect = txn.paymentType != null && txn.paymentType != 'Cash';
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: GlassCard(
@@ -498,15 +462,6 @@ class _TodayTxnsList extends StatelessWidget {
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                           if (txn.paymentType != null)
                             Text(txn.paymentType!, style: TextStyle(fontSize: 11, color: AppColors.textSecondary.withValues(alpha: 0.7))),
-                          if (showCashEffect)
-                            Text(
-                              'Cash ${isIncome ? '-' : '+'}${fmt.format(txn.amount)}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                                color: isIncome ? AppColors.expense : AppColors.income,
-                              ),
-                            ),
                         ],
                       ),
                     ),

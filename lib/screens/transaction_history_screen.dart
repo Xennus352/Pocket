@@ -377,20 +377,6 @@ class _HistoryTile extends StatelessWidget {
                             ],
                           ],
                         ),
-                        if (txn.paymentType != null && txn.paymentType != 'Cash')
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              'Cash ${txn.type == TransactionType.income ? '-' : '+'}${fmt.format(txn.amount)}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                                color: txn.type == TransactionType.income
-                                    ? AppColors.expense
-                                    : AppColors.income,
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ),
